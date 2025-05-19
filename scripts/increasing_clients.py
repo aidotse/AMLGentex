@@ -2,6 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 import os
+import pickle
 import yaml
 from flib import servers, clients, models
 from flib.train import federated
@@ -11,15 +12,15 @@ from flib.utils import get_optimal_params
 def main():
     mp.set_start_method('spawn', force=True)
     
-    EXPERIMENT = '12_banks_homo_mid'
+    EXPERIMENT = '12_banks'
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, help='Path to config file.', default=f'experiments/{EXPERIMENT}/config.yaml')
-    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['GCN']) # 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
+    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['GCN', 'GAT', 'GraphSAGE']) # 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
     parser.add_argument('--n_workers', type=int, help='Number of workers. Defaults to number of clients.', default=4)
     parser.add_argument('--results_dir', type=str, default=f'experiments/{EXPERIMENT}/results')
-    parser.add_argument('--seeds', nargs='+', help='Seeds.', default=[42, 43, 44, 45, 46, 47, 48, 49, 50, 51])
-    parser.add_argument('--use_optimal_params', type=bool, help='Read the parameters from Optuna.', default=True)
+    parser.add_argument('--seeds', nargs='+', help='Seeds.', default=[42]) # 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+    parser.add_argument('--use_optimal_params', type=bool, help='Read the parameters from Optuna.', default=False)
     args = parser.parse_args()
     
     print('\nParsed arguments:')
@@ -38,7 +39,7 @@ def main():
         for i in range(len(client_ids)):
             kwargs = config[model_type]['default'] | config[model_type]['federated']
             kwargs['clients'] = {k: v for k, v in kwargs['clients'].items() if k in client_ids[:i+1]}
-            kwargs = get_optimal_params(kwargs, f"{args.results_dir}/federated/{model_type}") if args.use_optimal_params else kwargs
+            # kwargs = get_optimal_params(kwargs, f"{args.results_dir}/federated/{model_type}") if args.use_optimal_params else kwargs
             train_avg_precision = 0.0
             val_avg_precision = 0.0
             test_avg_precision = 0.0
@@ -51,6 +52,11 @@ def main():
                     n_workers = args.n_workers, 
                     **kwargs
                 )
+                results_dir = os.path.join(args.results_dir, 'federated', model_type, f'{i+1}_clients', f'seed_{seed}')
+                os.makedirs(results_dir, exist_ok=True)
+                with open(os.path.join(results_dir, 'results.pkl'), 'wb') as f:
+                    pickle.dump(results, f)
+                print(f'Saved results to {results_dir}/results.pkl\n')
                 for id in results:
                     train_avg_precision += results[id]['trainset']['average_precision'][-1] / len(results) / len(args.seeds)
                     val_avg_precision += results[id]['valset']['average_precision'][-1] / len(results) / len(args.seeds)

@@ -106,7 +106,7 @@ class TransactionNetwork():
         homophily_class = 0.0
         for i, (h_sum1, h_sum2) in enumerate(zip(h_class_sum1, h_class_sum2)):
             h = h_sum1 / h_sum2 if h_sum2 > 0 else 1
-            homophily_class = 1/(len(h_class_sum1)-1) * max(h - len(self.df_nodes[self.df_nodes['is_sar']==i]) / n_nodes, 0)
+            homophily_class += 1/(len(h_class_sum1)-1) * max(h - len(self.df_nodes[self.df_nodes['is_sar']==i]) / n_nodes, 0)
         return homophily_edge, homophily_nodes, homophily_class
     
     def get_all_nodes(self):

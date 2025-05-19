@@ -1,4 +1,5 @@
 import argparse
+import yaml
 
 from flib.sim import DataGenerator
 from flib.preprocess import DataPreprocessor
@@ -7,20 +8,23 @@ from time import time
 
 def main():
     
-    DATASET = '1_bank_homo_mid'
+    EXPERIMENT = '12_banks'
     
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--conf_file', type=str, help='Path to the config file', default=f'/home/edvin/Desktop/flib/experiments/param_files/{DATASET}/conf.json')
-    parser.add_argument('--num_trials', type=int, default=200)
+    parser.add_argument('--data_conf_file', type=str, help='Path to the data config file', default=f'/home/edvin/Desktop/flib/experiments/{EXPERIMENT}/data/param_files/conf.json')
+    parser.add_argument('--config', type=str, help='Path to the config file', default=f'experiments/{EXPERIMENT}/config.yaml')
+    parser.add_argument('--num_trials', type=int, default=1)
     parser.add_argument('--utility', type=str, default='ap')
     parser.add_argument('--bank', type=str, default='bank')
     args = parser.parse_args()
     
     # Create generator, preprocessor, and tuner
-    generator = DataGenerator(args.conf_file)
-    preprocessor = DataPreprocessor(args.conf_file, args.bank)
-    tuner = DataTuner(conf_file=args.conf_file, generator=generator, preprocessor=preprocessor, target=0.01, utility=args.utility, model='DecisionTreeClassifier')
+    generator = DataGenerator(args.data_conf_file)
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+    preprocessor = DataPreprocessor(config['preprocess'])
+    tuner = DataTuner(data_conf_file=args.data_conf_file, config=config, generator=generator, preprocessor=preprocessor, target=0.01, utility=args.utility, model='DecisionTreeClassifier')
     
     # Tune the temporal sar parameters
     t = time()

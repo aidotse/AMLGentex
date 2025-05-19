@@ -72,12 +72,15 @@ def node_label_hist(df:pd.DataFrame, banks:list, file:str):
     df.to_csv(file.replace('.png', '.csv'), index=False)
 
 
-def balance_curves(df:pd.DataFrame, file:str):
+def balance_curves(df:pd.DataFrame, file:str, bank=None):
     x = np.arange(df['step'].min(), df['step'].max()+1)
-    accts = pd.concat([df[['nameOrig', 'isSAR']].rename(columns={'nameOrig': 'name'}), df[['nameDest', 'isSAR']].rename(columns={'nameDest': 'name'})])
+    accts = pd.concat([df[['nameOrig', 'bankOrig', 'isSAR']].rename(columns={'nameOrig': 'name', 'bankOrig': 'bank'}), df[['nameDest', 'bankDest', 'isSAR']].rename(columns={'nameDest': 'name', 'bankDest': 'bank'})])
+    if bank is not None:
+        accts = accts[accts['bank'] == bank]
     gb = accts.groupby('name')
     accts = gb['isSAR'].max()
-    accts = accts.drop([-1, -2])
+    if -1 in accts.index or -2 in accts.index:
+        accts = accts.drop([-1, -2])
     neg_accts = accts[accts == 0].sample(3).index.tolist()
     pos_accts = accts[accts == 1].sample(3).index.tolist()
     fig, ax = plt.subplots()
@@ -91,6 +94,8 @@ def balance_curves(df:pd.DataFrame, file:str):
         ax.step(x, y, where='pre', color='C0', label=acct)
         csv[f'{acct}'] = y
     for acct in pos_accts:
+        if acct == 9633 or acct == 68717 or acct == 32407:
+            print(acct)
         in_txs = df[df['nameDest'] == acct][['step', 'newbalanceDest']].rename(columns={'newbalanceDest': 'balance'})
         out_txs = df[df['nameOrig'] == acct][['step', 'newbalanceOrig']].rename(columns={'newbalanceOrig': 'balance'})
         txs = pd.concat([in_txs, out_txs])
@@ -390,10 +395,40 @@ def homophily(df:pd.DataFrame, banks, file:str):
     df = df[df['bankDest'] != 'sink']
     df_nodes, df_edges = get_blueprint(df)
     n_pos_edges = df_edges[df_edges['class'] == 1].shape[0]
-    n_neg_edges = df_edges[(df_edges['src'].isin(df_nodes[df_nodes['class'] == 0]['id'])) & (df_edges['dst'].isin(df_nodes[df_nodes['class'] == 0]['id']))]
+    n_neg_edges = df_edges[(df_edges['src'].isin(df_nodes[df_nodes['class'] == 0]['id'])) & (df_edges['dst'].isin(df_nodes[df_nodes['class'] == 0]['id']))].shape[0]
     n_edges = df_edges.shape[0]
     homophily_edge = (n_pos_edges + n_neg_edges) / n_edges
-    pass
+    n_nodes = df_nodes.shape[0]
+    homophiliy_node = 0
+    homophiliy_class_sum1 = [0.0, 0.0]
+    homophiliy_class_sum2 = [0.0, 0.0]
+    for v in range(n_nodes):
+        node = df_nodes.iloc[v]['id']
+        node_class = df_nodes.iloc[v]['class']
+        df_node_edges = df_edges[(df_edges['src'] == node) | (df_edges['dst'] == node)]
+        neighbours = set(df_node_edges['src'].tolist() + df_node_edges['dst'].tolist())
+        neighbours.remove(node)
+        n_neighbours = len(neighbours)
+        df_neighbours = df_nodes[df_nodes['id'].isin(neighbours)]
+        n_similar_neighbours = df_neighbours[df_neighbours['class'] == node_class].shape[0]
+        homophiliy_node += n_similar_neighbours / n_neighbours / n_nodes
+        homophiliy_class_sum1[int(node_class)] += n_similar_neighbours
+        homophiliy_class_sum2[int(node_class)] += n_neighbours
+    h_neg = homophiliy_class_sum1[0] / homophiliy_class_sum2[0] if homophiliy_class_sum2[0] > 0 else 1
+    # homophily_class_neg = max(h_neg - len(df_nodes[df_nodes['class']==0]) / n_nodes, 0)
+    h_pos = homophiliy_class_sum1[1] / homophiliy_class_sum2[1] if homophiliy_class_sum2[1] > 0 else 1
+    # homophily_class_pos = max(h_pos - len(df_nodes[df_nodes['class']==1]) / n_nodes, 0)
+    
+    # homophily_class = 0.0
+    # for i, (sum1, sum2) in enumerate(zip(homophiliy_class_sum1, homophiliy_class_sum2)):
+    #     h = sum1 / sum2 if sum2 > 0 else 1
+    #     homophily_class += 1/(len(homophiliy_class_sum1)-1) * max(h - len(df_nodes[df_nodes['class']==i]) / n_nodes, 0)
+    
+    print(h_neg,h_pos)
+    
+    with open(file, 'w') as f:
+        f.write('homophily_edge,homophiliy_node,homophily_class_neg,homophily_class_pos\n')
+        f.write(f'{homophily_edge},{homophiliy_node},{h_neg},{h_pos}\n')
 
 
 def sar_over_n_banks_hist(df:pd.DataFrame, file:str):
@@ -498,24 +533,24 @@ def plot(df:pd.DataFrame, plot_dir:str):
         banks.remove('source')
     if 'sink' in banks:
         banks.remove('sink')
-    sar_pattern_account_hist(df, os.path.join(plot_dir, 'sar_pattern_account_hist.png'))
-    sar_pattern_txs_hist(df, os.path.join(plot_dir, 'sar_pattern_txs_hist.png'))
-    n_sar_account_participation(df, os.path.join(plot_dir, 'sar_account_participation_hist.png'))
-    sar_over_n_banks_hist(df, os.path.join(plot_dir, 'sar_over_n_banks_hist.png'))
-    edge_label_hist(df, banks+['all'], os.path.join(plot_dir, 'edge_label_hist.png'))
-    node_label_hist(df, banks+['all'], os.path.join(plot_dir, 'node_label_hist.png'))
-    homophily(df, banks+['all'], os.path.join(plot_dir, 'homophily.png'))
-    for bank in banks:
-        os.makedirs(os.path.join(plot_dir, bank), exist_ok=True)
-        df_bank = df[(df['bankOrig'] == bank) | (df['bankDest'] == bank)]
-        balance_curves(df_bank, os.path.join(plot_dir, bank, 'balance_curves.png'))
-        pattern_hist(df_bank, os.path.join(plot_dir, bank, 'pattern_hist.png'))
-        amount_hist(df_bank, os.path.join(plot_dir, bank, 'amount_hist.png'))
-        spending_hist(df_bank, os.path.join(plot_dir, bank, 'spending_hist.png'))
-        n_txs_hist(df_bank, bank, os.path.join(plot_dir, bank, 'n_txs_hist.png'))
-        n_spending_hist(df_bank, os.path.join(plot_dir, bank, 'n_spending_hist.png'))
-        powerlaw_degree_dist(df_bank, os.path.join(plot_dir, bank, 'powerlaw_degree_dist.png'))
-        graph(df_bank, os.path.join(plot_dir, bank, 'graph.png'), n_alerts=10)
+    # sar_pattern_account_hist(df, os.path.join(plot_dir, 'sar_pattern_account_hist.png'))
+    # sar_pattern_txs_hist(df, os.path.join(plot_dir, 'sar_pattern_txs_hist.png'))
+    # n_sar_account_participation(df, os.path.join(plot_dir, 'sar_account_participation_hist.png'))
+    # sar_over_n_banks_hist(df, os.path.join(plot_dir, 'sar_over_n_banks_hist.png'))
+    # edge_label_hist(df, banks+['all'], os.path.join(plot_dir, 'edge_label_hist.png'))
+    # node_label_hist(df, banks+['all'], os.path.join(plot_dir, 'node_label_hist.png'))
+    homophily(df, banks+['all'], os.path.join(plot_dir, os.path.join(plot_dir, 'homophily.csv')))
+    # for bank in banks:
+    #     os.makedirs(os.path.join(plot_dir, bank), exist_ok=True)
+    #     df_bank = df[(df['bankOrig'] == bank) | (df['bankDest'] == bank)]
+    #     balance_curves(df_bank, os.path.join(plot_dir, bank, 'balance_curves.png'), bank=bank)
+    #     pattern_hist(df_bank, os.path.join(plot_dir, bank, 'pattern_hist.png'))
+    #     amount_hist(df_bank, os.path.join(plot_dir, bank, 'amount_hist.png'))
+    #     spending_hist(df_bank, os.path.join(plot_dir, bank, 'spending_hist.png'))
+    #     n_txs_hist(df_bank, bank, os.path.join(plot_dir, bank, 'n_txs_hist.png'))
+    #     n_spending_hist(df_bank, os.path.join(plot_dir, bank, 'n_spending_hist.png'))
+    #     powerlaw_degree_dist(df_bank, os.path.join(plot_dir, bank, 'powerlaw_degree_dist.png'))
+    #     graph(df_bank, os.path.join(plot_dir, bank, 'graph.png'), n_alerts=10)
 
 
 def main(tx_log:str, plot_dir:str):
@@ -526,9 +561,12 @@ def main(tx_log:str, plot_dir:str):
 
 
 if __name__ == '__main__':
-    EXPERIMENT = '3_banks_homo_mid' # '30K_accts', '3_banks_homo_mid'
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--tx_log', type=str, help='Path to the transaction log', default=f'/home/edvin/Desktop/flib/experiments/{EXPERIMENT}/data/raw/tx_log.csv')
-    parser.add_argument('--plot_dir', type=str, help='Path to the directory where the plots will be saved', default=f'/home/edvin/Desktop/flib/experiments/{EXPERIMENT}/results/data')
-    args = parser.parse_args()
-    main(args.tx_log, args.plot_dir)
+    EXPERIMENTS = ['12_banks', '12_banks_no_dist_change', '12_banks_dist_change', '12_banks_homo_mid', '12_banks_homo_mid_no_dist_change', '12_banks_homo_mid_dist_change'] # '30K_accts', '3_banks_homo_mid'
+    for EXPERIMENT in EXPERIMENTS:
+        print(f'Experiment: {EXPERIMENT}')
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--tx_log', type=str, help='Path to the transaction log', default=f'/home/edvin/Desktop/flib/experiments/{EXPERIMENT}/data/raw/tx_log.csv')
+        parser.add_argument('--plot_dir', type=str, help='Path to the directory where the plots will be saved', default=f'/home/edvin/Desktop/flib/experiments/{EXPERIMENT}/results/data')
+        args = parser.parse_args()
+        main(args.tx_log, args.plot_dir)
+        print()

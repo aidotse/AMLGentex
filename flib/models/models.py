@@ -3,6 +3,8 @@ import torch_geometric.nn
 from flib.models import TorchBaseModel
 from torch.nn import functional as F
 from typing import Dict
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 
 class LogisticRegressor(TorchBaseModel):
     def __init__(self, input_dim: int, output_dim: int):
@@ -177,3 +179,8 @@ class GraphSAGE(TorchBaseModel):
                 param.data = parameters[name].clone().detach()
             elif strict:
                 raise KeyError(f"Parameter '{name}' not found in provided dictionary.")
+
+
+# class DecisionTree(DecisionTreeClassifier):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
