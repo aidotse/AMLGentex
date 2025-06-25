@@ -366,9 +366,9 @@ The schedual id is used to specify how transactions within a pattern will occur 
 If you use AMLGentex in your work, please cite the following paper:
 
 ```bibtex
-@misc{östman2025amlgentexmobilizingdatadrivenresearch,
+@misc{ostman2025amlgentexmobilizingdatadrivenresearch,
   title     = {AMLgentex: Mobilizing Data-Driven Research to Combat Money Laundering},
-  author    = {Johan Östman and Edvin Callisen and Anton Chen and Kristiina Ausmees and Emanuel Gårdh and Jovan Zamac and Jolanta Goldsteine and Hugo Wefer and Simon Whelan and Markus Reimegård},
+  author    = {Johan \"Ostman and Edvin Callisen and Anton Chen and Kristiina Ausmees and Emanuel G\aardh and Jovan Zamac and Jolanta Goldsteine and Hugo Wefer and Simon Whelan and Markus Reimeg\aard},
   year      = {2025},
   eprint    = {2506.13989},
   archivePrefix = {arXiv},
