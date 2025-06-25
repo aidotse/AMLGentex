@@ -1,20 +1,12 @@
-**OBS: under construction!**
+# AMLGentex
 
-This is the repsitory for all the code in the project.
+AMLGentex is a benchmarking suite developed by AI Sweden in collaboration with Handelsbanken and Swedbank. It supports the generation of realistic synthetic transaction data, the training of machine learning models, and the application of explainability techniques. The project aims to provide researchers and practitioners with accessible, high-quality data to advance the development and evaluation of anti-money laundering systems. In particular, the data is loosely based on the mobile payment system SWISH but is easily extended beyond. As illustrated in the figure below, AMLGentex captures a range of real-world data complexities, each assessed in terms of severity by AML experts from Swedbank and Handelsbanken.
 
-**Currently containing**
-* AMLsim: A simulator for generating transaction networks used in anti-money laundering research.
-* transaction-network-explorer: A tool for exploring transaction networks.
-* federated-learning: A framework for training a model on a distributed dataset.
-* gnn: graph neural network models for transaction networks.
-* tab-ddpm: A ml model for generating sythetic tabular data.* 
-
-# AMLsim
-AMLsim is a simulator for generating transaction networks used in anti-money laundering research. It is based on the simulator by IBM (TODO: add link) and is extended to utilize distributions and model behavioural features. This version is designed to generate SWISH data of personal accounts. It can simulate income and outcome for accounts, as well as known transactions patterns of normal and suspisious behaviour. In short, it has two parts: a python part for generating the transaction network and a java part for simulating the behaviour of the agents. The simulation is controlled by 6 parameter files:
-* 1 json file, which defines behviours of accounts and some paths varibles used during the simulation. 
-* 5 csv files, which defines some inital condtions and together defines the structure of the transaction network.
-
-The output of the simulation is a csv file with all the transactions.
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/ff9c8a04-2344-4f5d-8821-f623464c826c" 
+       width="400" 
+       alt="Key challenges in transaction monitoring for AML based on expert opinions from AML practitioners">
+</p>
 
 ## Accronyms and definitions
 * SAR: Suspicious Activity Report - accounts or transactions that are labeled as suspisious by the bank
@@ -24,13 +16,30 @@ The output of the simulation is a csv file with all the transactions.
 * Income: A transaction from a source to and an account (not a SWISH transaction)
 * Outcome: A transaction from an account to a sink (not a SWISH transaction)
 
+## Synthetic Data Generation
+The synthetic data generation is inspired by IBM's AMLSim (https://github.com/IBM/AMLSim) but with extensions in multiple directions. In particular, AMLGentex offers
+* A controlled way to generate scale-free transaction networks (https://en.wikipedia.org/wiki/Scale-free_network) based on three parameters. This provides the user with great control over the in- and out-degree distribution in the network
+* A matching mechanism (heavily updated from AMLSim) where user-defined patterns (both normal and laundering) are sequentially inserted into the network. The normal patterns are only inserted if there is room in the blueprint network (based on the degree distribution) whereas the money laundering patterns are always included. The process is outlined in the figure below.
+* Modelling of in- and out-flow of funds in the network. Funds enter the network by means of salaries and goes out by accounts performing transactions. The income and outcome nodes are denoted as the source and the sink, respectively.
+* A simple statistical model for account behaviour that keeps track of the average balance over a sliding window which determines if the account is likely to spend in the current time. A balance above the average indicates a sense of being resourceful and hence more likely to spend.
+* Money laundering occurs in a three-stage process: placement, layering, integration.
+* Accounts engaging in money laundering have a user-defined probability of engaging in multiple laundering events.
+
+<p align="center">
+  <img width="681" alt="Screenshot 2025-06-25 at 17 13 47" src="https://github.com/user-attachments/assets/85994420-754d-47ff-8107-39bab914d835" />
+</p>
+
+
+
+# AMLsim
+AMLsim is a simulator for generating transaction networks used in anti-money laundering research. It is based on the simulator by IBM (TODO: add link) and is extended to utilize distributions and model behavioural features. This version is designed to generate SWISH data of personal accounts. It can simulate income and outcome for accounts, as well as known transactions patterns of normal and suspisious behaviour. In short, it has two parts: a python part for generating the transaction network and a java part for simulating the behaviour of the agents. The simulation is controlled by 6 parameter files:
+* 1 json file, which defines behviours of accounts and some paths varibles used during the simulation. 
+* 5 csv files, which defines some inital condtions and together defines the structure of the transaction network.
+
+The output of the simulation is a csv file with all the transactions.
+
+
 ## Dependencies
-
-### Alternative 1: Docker
-
-1. pull image from thecoldice/amlsim:latest on dockerhub
-
-### Alternative 2: Manual
 
 Dependencies: python3.7, java, maven
 
@@ -42,7 +51,7 @@ Dependencies: python3.7, java, maven
 ## Setup
 
 1. Create a folder for the outputs: `mkdir outputs`
-2. (Only for manual) Create a temporary folder for storing pyhton output: `mkdir tmp`
+2. Create a temporary folder for storing pyhton output: `mkdir tmp`
 3. Create a folder for the simulation paramters: `mkdir paramFiles`
 4. In paramFiles create a folder for a new simulation, e.g. `mkdir paramFiles/simulation1`
 5. In the simulation folder, create these files: conf.json, accounts.csv, normalModels.csv, alertPatterns.csv, degree.csv and transactionTypes.csv
@@ -349,4 +358,21 @@ The schedual id is used to specify how transactions within a pattern will occur 
 * **Random interval**: id = 1. A random interval will be generated uniformly within the provided period. Each transactions in the pattern will then occur sequentially.
 * **Unorderd**: id = 2. The transactions in the pattern will be placed in a random order over the period of the pattern.
 * **Simultaneous**: id = 3. All transactions in the pattern will occur at the same time step.
+
+
+---
+
+# 
+If you use AMLGentex in your work, please cite the following paper:
+
+```bibtex
+@misc{östman2025amlgentexmobilizingdatadrivenresearch,
+  title     = {AMLgentex: Mobilizing Data-Driven Research to Combat Money Laundering},
+  author    = {Johan Östman and Edvin Callisen and Anton Chen and Kristiina Ausmees and Emanuel Gårdh and Jovan Zamac and Jolanta Goldsteine and Hugo Wefer and Simon Whelan and Markus Reimegård},
+  year      = {2025},
+  eprint    = {2506.13989},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SI},
+  url       = {https://arxiv.org/abs/2506.13989}
+}
 
