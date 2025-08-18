@@ -533,24 +533,24 @@ def plot(df:pd.DataFrame, plot_dir:str):
         banks.remove('source')
     if 'sink' in banks:
         banks.remove('sink')
-    # sar_pattern_account_hist(df, os.path.join(plot_dir, 'sar_pattern_account_hist.png'))
-    # sar_pattern_txs_hist(df, os.path.join(plot_dir, 'sar_pattern_txs_hist.png'))
-    # n_sar_account_participation(df, os.path.join(plot_dir, 'sar_account_participation_hist.png'))
-    # sar_over_n_banks_hist(df, os.path.join(plot_dir, 'sar_over_n_banks_hist.png'))
-    # edge_label_hist(df, banks+['all'], os.path.join(plot_dir, 'edge_label_hist.png'))
-    # node_label_hist(df, banks+['all'], os.path.join(plot_dir, 'node_label_hist.png'))
+    sar_pattern_account_hist(df, os.path.join(plot_dir, 'sar_pattern_account_hist.png'))
+    sar_pattern_txs_hist(df, os.path.join(plot_dir, 'sar_pattern_txs_hist.png'))
+    n_sar_account_participation(df, os.path.join(plot_dir, 'sar_account_participation_hist.png'))
+    sar_over_n_banks_hist(df, os.path.join(plot_dir, 'sar_over_n_banks_hist.png'))
+    edge_label_hist(df, banks+['all'], os.path.join(plot_dir, 'edge_label_hist.png'))
+    node_label_hist(df, banks+['all'], os.path.join(plot_dir, 'node_label_hist.png'))
     homophily(df, banks+['all'], os.path.join(plot_dir, os.path.join(plot_dir, 'homophily.csv')))
-    # for bank in banks:
-    #     os.makedirs(os.path.join(plot_dir, bank), exist_ok=True)
-    #     df_bank = df[(df['bankOrig'] == bank) | (df['bankDest'] == bank)]
-    #     balance_curves(df_bank, os.path.join(plot_dir, bank, 'balance_curves.png'), bank=bank)
-    #     pattern_hist(df_bank, os.path.join(plot_dir, bank, 'pattern_hist.png'))
-    #     amount_hist(df_bank, os.path.join(plot_dir, bank, 'amount_hist.png'))
-    #     spending_hist(df_bank, os.path.join(plot_dir, bank, 'spending_hist.png'))
-    #     n_txs_hist(df_bank, bank, os.path.join(plot_dir, bank, 'n_txs_hist.png'))
-    #     n_spending_hist(df_bank, os.path.join(plot_dir, bank, 'n_spending_hist.png'))
-    #     powerlaw_degree_dist(df_bank, os.path.join(plot_dir, bank, 'powerlaw_degree_dist.png'))
-    #     graph(df_bank, os.path.join(plot_dir, bank, 'graph.png'), n_alerts=10)
+    for bank in banks:
+        os.makedirs(os.path.join(plot_dir, bank), exist_ok=True)
+        df_bank = df[(df['bankOrig'] == bank) | (df['bankDest'] == bank)]
+        balance_curves(df_bank, os.path.join(plot_dir, bank, 'balance_curves.png'), bank=bank)
+        pattern_hist(df_bank, os.path.join(plot_dir, bank, 'pattern_hist.png'))
+        amount_hist(df_bank, os.path.join(plot_dir, bank, 'amount_hist.png'))
+        spending_hist(df_bank, os.path.join(plot_dir, bank, 'spending_hist.png'))
+        n_txs_hist(df_bank, bank, os.path.join(plot_dir, bank, 'n_txs_hist.png'))
+        n_spending_hist(df_bank, os.path.join(plot_dir, bank, 'n_spending_hist.png'))
+        powerlaw_degree_dist(df_bank, os.path.join(plot_dir, bank, 'powerlaw_degree_dist.png'))
+        graph(df_bank, os.path.join(plot_dir, bank, 'graph.png'), n_alerts=10)
 
 
 def main(tx_log:str, plot_dir:str):
@@ -561,7 +561,7 @@ def main(tx_log:str, plot_dir:str):
 
 
 if __name__ == '__main__':
-    EXPERIMENTS = ['12_banks', '12_banks_no_dist_change', '12_banks_dist_change', '12_banks_homo_mid', '12_banks_homo_mid_no_dist_change', '12_banks_homo_mid_dist_change'] # '30K_accts', '3_banks_homo_mid'
+    EXPERIMENTS = ['12_banks_homo_mid'] # ['12_banks', '12_banks_no_dist_change', '12_banks_dist_change', '12_banks_homo_mid', '12_banks_homo_mid_no_dist_change', '12_banks_homo_mid_dist_change'] # '30K_accts', '3_banks_homo_mid'
     for EXPERIMENT in EXPERIMENTS:
         print(f'Experiment: {EXPERIMENT}')
         parser = argparse.ArgumentParser()
