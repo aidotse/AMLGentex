@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, p
 from torch.utils.data import WeightedRandomSampler
 from tqdm import tqdm
 from typing import Any, Dict, List, Tuple
+from sklearn.preprocessing import MinMaxScaler
 
 class TorchClient():
     """
@@ -25,19 +26,47 @@ class TorchClient():
         
         train_df = pd.read_csv(trainset).drop(columns=['account', 'bank'])
         n = len(train_df)
+        n_neg = len(train_df[train_df['is_sar'] == 0])
+        n_pos = len(train_df[train_df['is_sar'] == 1])
+        
+        # Split into positive and negative classes
+        train_df_neg = train_df[train_df['is_sar'] == 0]
+        train_df_pos = train_df[train_df['is_sar'] == 1]
+        
         if valset is not None:
             val_df = pd.read_csv(valset).drop(columns=['account', 'bank'])
         else:
-            val_df = train_df.sample(n = int(n * valset_size), random_state=seed)
+            n_val_neg = int(n_neg * valset_size)
+            n_val_pos = int(n_pos * valset_size)
+            val_df_neg = train_df_neg.sample(n=n_val_neg, random_state=seed)
+            val_df_pos = train_df_pos.sample(n=n_val_pos, random_state=seed)
+            val_df = pd.concat([val_df_neg, val_df_pos])
             train_df = train_df.drop(val_df.index)
+            train_df_neg = train_df_neg.drop(val_df_neg.index)
+            train_df_pos = train_df_pos.drop(val_df_pos.index)
         if testset is not None:
             test_df = pd.read_csv(testset).drop(columns=['account', 'bank'])
         else:
-            test_df = train_df.sample(n = int(n * testset_size), random_state=seed)
+            n_test_neg = int(n_neg * testset_size)
+            n_test_pos = int(n_pos * testset_size)
+            test_df_neg = train_df_neg.sample(n=n_test_neg, random_state=seed)
+            test_df_pos = train_df_pos.sample(n=n_test_pos, random_state=seed)
+            test_df = pd.concat([test_df_neg, test_df_pos])
             train_df = train_df.drop(test_df.index)
+            train_df_neg = train_df_neg.drop(test_df_neg.index)
+            train_df_pos = train_df_pos.drop(test_df_pos.index)
         if trainset_size is not None:
-            train_df = train_df.sample(n = int(n * trainset_size), random_state=seed)
-            
+            n_train_neg = int(n_neg * trainset_size)
+            n_train_pos = int(n_pos * trainset_size)
+            train_df_neg = train_df_neg.sample(n=n_train_neg, random_state=seed)
+            train_df_pos = train_df_pos.sample(n=n_train_pos, random_state=seed)
+            train_df = pd.concat([train_df_neg, train_df_pos])
+        
+        # ensure datasets are shuffled
+        # train_df = train_df.sample(frac=1, random_state=seed)
+        # val_df = val_df.sample(frac=1, random_state=seed)
+        # test_df = test_df.sample(frac=1, random_state=seed)
+        
         self.trainset, self.valset, self.testset = tensordatasets(train_df, val_df, test_df, normalize=True, device=self.device)
         y=self.trainset.tensors[1].clone().detach().cpu()
         class_counts = torch.bincount(y)
@@ -127,6 +156,8 @@ class TorchClient():
             previous_train_loss = loss
             
             if round % eval_every == 0:
+                loss, y_pred, y_true = self.evaluate(dataset='testset')
+                self.log(dataset='testset', round=round, loss=loss, y_pred=y_pred, y_true=y_true)
                 loss, y_pred, y_true = self.evaluate(dataset='valset')
                 self.log(dataset='valset', round=round, loss=loss, y_pred=y_pred, y_true=y_true)
                 val_average_precision = average_precision_score(y_true, y_pred, recall_span=(0.6, 1.0))
@@ -240,10 +271,39 @@ class TorchGeometricClient():
         
         self.trainset, self.valset, self.testset = graphdataset(train_nodes_df, train_edges_df, val_nodes_df, val_edges_df, test_nodes_df, test_edges_df, device=device)
         if trainset_size is not None:
-            class_counts = torch.bincount(self.trainset.y)
-            self.trainset = torch_geometric.transforms.RandomNodeSplit(split='train_rest', num_val=valset_size, num_test=testset_size)(self.trainset)
+            num_nodes = len(self.trainset.y)
+            neg_indices = torch.where(self.trainset.y == 0)[0]
+            pos_indices = torch.where(self.trainset.y == 1)[0]
+            neg_indices = neg_indices[torch.randperm(len(neg_indices))]
+            pos_indices = pos_indices[torch.randperm(len(pos_indices))]
+            num_pos = len(pos_indices)
+            num_neg = len(neg_indices)
+            neg_train_end = int(trainset_size * num_neg)
+            pos_train_end = int(trainset_size * num_pos)
+            neg_val_end = neg_train_end + int(valset_size * num_neg)
+            pos_val_end = pos_train_end + int(valset_size * num_pos)
+            neg_test_end = neg_val_end + int(testset_size * num_neg)
+            pos_test_end = pos_val_end + int(testset_size * num_pos)
+            neg_train_indices = neg_indices[:neg_train_end]
+            pos_train_indices = pos_indices[:pos_train_end]
+            neg_val_indices = neg_indices[neg_train_end:neg_val_end]
+            pos_val_indices = pos_indices[pos_train_end:pos_val_end]
+            neg_test_indices = neg_indices[neg_val_end:neg_test_end]
+            pos_test_indices = pos_indices[pos_val_end:pos_test_end]
+            train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+            val_mask = torch.zeros(num_nodes, dtype=torch.bool)
+            test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+            train_mask[neg_train_indices] = True
+            train_mask[pos_train_indices] = True
+            val_mask[neg_val_indices] = True
+            val_mask[pos_val_indices] = True
+            test_mask[neg_test_indices] = True
+            test_mask[pos_test_indices] = True
+            self.trainset.train_mask = train_mask
+            self.trainset.val_mask = val_mask
+            self.trainset.test_mask = test_mask
         else:
-            self.trainset = torch_geometric.transforms.RandomNodeSplit(split='random', num_val=valset_size, num_test=testset_size)(self.trainset)
+            self.trainset = torch_geometric.transforms.RandomNodeSplit(split='train_rest', num_val=valset_size, num_test=testset_size)(self.trainset)
         
         self.model = Model(**filter_args(Model, kwargs)).to(self.device)
         Optimizer = getattr(torch.optim, optimizer)
@@ -349,6 +409,8 @@ class TorchGeometricClient():
             previous_train_loss = loss
             
             if round % eval_every == 0:
+                loss, y_pred, y_true = self.evaluate(dataset='testset')
+                self.log(dataset='testset', round=round, loss=loss, y_pred=y_pred, y_true=y_true)
                 loss, y_pred, y_true = self.evaluate(dataset='valset')
                 self.log(dataset='valset', round=round, loss=loss, y_pred=y_pred, y_true=y_true)
                 es_value = average_precision_score(y_true, y_pred, recall_span=(0.6, 1.0))
@@ -395,6 +457,110 @@ class TorchGeometricClient():
         loss.backward()
         gradients = self.get_gradients()
         return gradients
+    
+    def log(self, dataset: str, y_pred: np.ndarray, y_true: np.ndarray, round: int = None, loss: float = None, metrics: List[str] = None):
+        """
+        Log training results for a given round.
+        
+        Args:
+            dataset (str): Dataset name.
+            y_pred (np.ndarray): Model predictions.
+            y_true (np.ndarray): Ground truth labels.
+            round (int): Training round.
+            loss (float): Loss value.
+            metrics (list): List of metrics to calculate.
+        """
+        if metrics is None:
+            metrics = ['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall']
+
+        if dataset not in self.results:
+            self.results[dataset] = {metric: [] for metric in metrics}
+            self.results[dataset]['round'] = []
+            self.results[dataset]['loss'] = []
+
+        if round is not None:
+            self.results[dataset]['round'].append(round)
+        if loss is not None:
+            self.results[dataset]['loss'].append(loss)
+
+        for metric in metrics:
+            if metric == 'accuracy':
+                self.results[dataset]['accuracy'].append(accuracy_score(y_true, (y_pred > 0.5)))
+            elif metric == 'average_precision':
+                self.results[dataset]['average_precision'].append(average_precision_score(y_true, y_pred, recall_span=(0.6, 1.0)))
+            elif metric == 'balanced_accuracy':
+                self.results[dataset]['balanced_accuracy'].append(balanced_accuracy_score(y_true, (y_pred > 0.5)))
+            elif metric == 'f1':
+                self.results[dataset]['f1'].append(f1_score(y_true, (y_pred > 0.5), pos_label=1, zero_division=0.0))
+            elif metric == 'precision':
+                self.results[dataset]['precision'].append(precision_score(y_true, (y_pred > 0.5), pos_label=1, zero_division=0.0))
+            elif metric == 'recall':
+                self.results[dataset]['recall'].append(recall_score(y_true, (y_pred > 0.5), pos_label=1, zero_division=0.0))
+            elif metric == 'precision_recall_curve':
+                self.results[dataset]['precision_recall_curve'] = precision_recall_curve(y_true, y_pred)
+            elif metric == 'roc_curve':
+                self.results[dataset]['roc_curve'] = roc_curve(y_true, y_pred)
+
+class SklearnClient():
+    def __init__(self, id: str, seed: int, trainset: str, Model: Any, trainset_size: float = None, valset_size: float = None, testset_size: float  = None, valset: str = None, testset: str = None, **kwargs):
+        self.id = id
+        self.seed = seed
+        self.results = {}
+        
+        set_random_seed(self.seed)
+        
+        train_df = pd.read_csv(trainset).drop(columns=['account', 'bank'])
+        n = len(train_df)
+        if valset is not None:
+            val_df = pd.read_csv(valset).drop(columns=['account', 'bank'])
+        else:
+            val_df = train_df.sample(n = int(n * valset_size), random_state=seed)
+            train_df = train_df.drop(val_df.index)
+        if testset is not None:
+            test_df = pd.read_csv(testset).drop(columns=['account', 'bank'])
+        else:
+            test_df = train_df.sample(n = int(n * testset_size), random_state=seed)
+            train_df = train_df.drop(test_df.index)
+        if trainset_size is not None:
+            train_df = train_df.sample(n = int(n * trainset_size), random_state=seed)
+            
+        self.X_train = train_df.drop(columns=['is_sar']).to_numpy()
+        self.y_train = train_df['is_sar'].to_numpy()
+        scaler = MinMaxScaler()
+        self.X_train = scaler.fit_transform(self.X_train)
+        self.X_val = val_df.drop(columns=['is_sar']).to_numpy()
+        self.X_val = scaler.transform(self.X_val)
+        self.y_val = val_df['is_sar'].to_numpy()
+        self.X_test = test_df.drop(columns=['is_sar']).to_numpy()
+        self.X_test = scaler.transform(self.X_test)
+        self.y_test = test_df['is_sar'].to_numpy()
+        
+        self.model = Model(**filter_args(Model, kwargs))
+    
+    def train(self):
+        self.model.fit(self.X_train, self.y_train)
+        return
+    
+    def evaluate(self, dataset='trainset'):
+        dataset_mapping = {
+            'trainset': (self.X_train, self.y_train),
+            'valset': (self.X_val, self.y_val),
+            'testset': (self.X_test, self.y_test)
+        }
+        x, y = dataset_mapping.get(dataset, (self.X_train, self.y_train))
+        y_pred = self.model.predict_proba(x)
+        return 0.0, y_pred[:,1], y
+    
+    def run(self, **kwargs):
+        self.train()
+        loss, y_pred, y_true = self.evaluate(dataset='trainset')
+        self.log(dataset='trainset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
+        loss, y_pred, y_true = self.evaluate(dataset='valset')
+        self.log(dataset='valset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
+        loss, y_pred, y_true = self.evaluate(dataset='testset')
+        self.log(dataset='testset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
+        
+        return self.results
     
     def log(self, dataset: str, y_pred: np.ndarray, y_true: np.ndarray, round: int = None, loss: float = None, metrics: List[str] = None):
         """

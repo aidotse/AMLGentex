@@ -138,8 +138,8 @@ def plot_metrics(data: dict, dir: str, metrics: List[str], clients: List[str], d
                     plt.legend()
                 if metric in ['average_precision', 'f1', 'precision', 'precision_recall_curve']:
                     plt.yscale('log')
-                elif metric == 'loss':
-                    plt.ylim(0.0, 8.0)
+                # elif metric == 'loss':
+                    # plt.ylim(0.0, 8.0)
                 plt.grid()
                 plt.tight_layout()
                 plt.savefig(os.path.join(dir, "png", f"{metric}.png"))
@@ -185,8 +185,8 @@ def plot_metrics(data: dict, dir: str, metrics: List[str], clients: List[str], d
                 # plt.legend()
                 if metric in ['average_precision', 'f1', 'precision']:
                     plt.yscale('log')
-                elif metric == 'loss':
-                    plt.ylim(0.0, 6.0)
+                # elif metric == 'loss':
+                    # plt.ylim(0.0, 6.0)
                 plt.grid()
                 plt.tight_layout()
                 plt.savefig(os.path.join(dir, "png", f"{metric}.png"))

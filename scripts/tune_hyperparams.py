@@ -10,16 +10,16 @@ def main():
     
     mp.set_start_method('spawn', force=True)
     
-    EXPERIMENT = '12_banks_homo_mid'
+    EXPERIMENT = '12_banks_homo_easy'
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, help='Path to config file.', default=f'experiments/{EXPERIMENT}/config.yaml')
-    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE']) # 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
-    parser.add_argument('--n_trials', type=int, help='Number of trials.', default=100)
+    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['GCN']) # 'DecisionTreeClassifier', 'RandomForestClassifier', 'GradientBoostingClassifier', 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
+    parser.add_argument('--n_trials', type=int, help='Number of trials.', default=90)
     parser.add_argument('--n_workers', type=int, help='Number of workers. Defaults to number of clients.', default=4)
-    parser.add_argument('--results_dir', type=str, default=f'experiments/{EXPERIMENT}/results')
+    parser.add_argument('--results_dir', type=str, default=f'experiments/{EXPERIMENT}/results_incomplet_labels')
     parser.add_argument('--seed', type=int, help='Seed.', default=42)
-    parser.add_argument('--settings', nargs='+', help='Types of settings to use. Can be "isolated", "centralized" or "federated".', default=['centralized', 'federated', 'isolated']) # 'centralized', 'federated', 'isolated'
+    parser.add_argument('--settings', nargs='+', help='Types of settings to use. Can be "isolated", "centralized" or "federated".', default=['centralized']) # 'centralized', 'federated', 'isolated'
     args = parser.parse_args()
     
     print('\nParsed arguments:')
@@ -64,7 +64,7 @@ def main():
                         print(f'{param}: {trial.params[param]}')
             print()
         
-        if 'federated' in args.settings:
+        if 'federated' in args.settings and 'federated' in config[model_type]:
             print(f'\nTuning hyperparameters for {model_type} in a federated setting.')
             t = time.time()
             os.makedirs(os.path.join(args.results_dir, f'federated/{model_type}'), exist_ok=True)

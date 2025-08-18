@@ -12,16 +12,16 @@ def main():
     
     mp.set_start_method('spawn', force=True)
     
-    EXPERIMENT = '12_banks_homo_mid'
+    EXPERIMENT = '12_banks_homo_easy'
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, help='Path to config file.', default=f'experiments/{EXPERIMENT}/config.yaml')
-    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE']) # 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
+    parser.add_argument('--model_types', nargs='+', help='Types of models to train.', default=['GCN']) # 'DecisionTreeClassifier', 'RandomForestClassifier', 'GradientBoostingClassifier', 'LogisticRegressor', 'MLP', 'GCN', 'GAT', 'GraphSAGE'
     parser.add_argument('--n_workers', type=int, help='Number of workers. Defaults to number of clients.', default=4)
-    parser.add_argument('--results_dir', type=str, default=f'experiments/{EXPERIMENT}/results')
+    parser.add_argument('--results_dir', type=str, default=f'experiments/{EXPERIMENT}/results_incomplet_labels')
     parser.add_argument('--seed', type=int, help='Seed.', default=42)
-    parser.add_argument('--use_optimal_params', type=bool, help='Read the parameters from Optuna.', default=True)
-    parser.add_argument('--settings', nargs='+', help='Types of settings to use. Can be "isolated", "centralized" or "federated".', default=['centralized', 'federated', 'isolated']) # 'centralized', 'federated', 'isolated'
+    parser.add_argument('--use_optimal_params', type=bool, help='Read the parameters from Optuna.', default=False)
+    parser.add_argument('--settings', nargs='+', help='Types of settings to use. Can be "isolated", "centralized" or "federated".', default=['centralized']) # 'centralized', 'federated', 'isolated'
     args = parser.parse_args()
     
     print('\nParsed arguments:')
@@ -52,7 +52,7 @@ def main():
             with open(os.path.join(results_dir, 'results.pkl'), 'wb') as f:
                 pickle.dump(results, f)
             print(f'Saved results to {results_dir}/results.pkl\n')
-        if 'federated' in args.settings:
+        if 'federated' in args.settings and 'federated' in config[model_type]:
             print(f'Training {model_type} in federated setting.')
             t = time.time()
             kwargs = config[model_type]['default'] | config[model_type]['federated']
