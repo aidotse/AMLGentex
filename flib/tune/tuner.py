@@ -15,15 +15,6 @@ class DataTuner:
         self.seed = seed
         self.num_trials_model = num_trials_model
     
-    def calc_min(self):
-        utils.set_same_temp_params(self.data_conf_file)
-        tx_log_file = self.generator(self.data_conf_file)
-        dataset = self.preprocessor(tx_log_file)
-        classifier = Classifier(dataset, self.data_conf_file.replace('conf.json', ''))
-        model = classifier.train(model=self.model, tune_hyperparameters=True, n_trials=100)
-        score, importances = classifier.evaluate(utility=self.utility)
-        return score
-    
     def __call__(self, n_trials):
         
         optimizer = Optimizer(data_conf_file=self.data_conf_file, config=self.config, generator=self.generator, preprocessor=self.preprocessor, target=self.target, utility=self.utility, model=self.model, bo_dir=self.bo_dir, seed=self.seed, num_trials_model=self.num_trials_model)

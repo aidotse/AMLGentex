@@ -80,6 +80,7 @@ class Optimizer():
                 storage = storage
             )
             best_trials = hyperparamtuner.optimize(n_trials=self.num_trials_model)
+            
             avg_fpr += hyperparamtuner.fpr / len(self.config[self.model]['isolated']['clients'])
             avg_feature_importances_error += hyperparamtuner.feature_importances_error / len(self.config[self.model]['isolated']['clients'])
         
