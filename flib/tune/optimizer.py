@@ -1,11 +1,14 @@
 import optuna
+from flib import clients, models
 from flib.tune.classifier import Classifier # TODO: classifiers should be in flib.models
+from flib.train.tune_hyperparams import HyperparamTuner
+from flib.train import centralized 
 import matplotlib.pyplot as plt
 import json
 import os
 
 class Optimizer():
-    def __init__(self, data_conf_file, config, generator, preprocessor, target:float, utility:str, model:str='DecisionTreeClassifier', bank=None):
+    def __init__(self, data_conf_file, config, generator, preprocessor, target:float, utility:str, model:str='DecisionTreeClassifier', bank=None, bo_dir:str='tmp', seed:int=0, num_trials_model:int=1):
         self.data_conf_file = data_conf_file
         self.config = config
         self.generator = generator
@@ -14,26 +17,28 @@ class Optimizer():
         self.utility = utility
         self.model = model
         self.bank = bank
+        self.bo_dir = bo_dir
+        self.seed = seed
+        self.num_trials_model = num_trials_model
     
     def objective(self, trial:optuna.Trial):
         with open(self.data_conf_file, 'r') as f:
             data_config = json.load(f)
         
-        data_config['default']['mean_amount_sar'] = trial.suggest_int('mean_amount_sar', data_config['optimisation_bounds']['mean_amount_sar'][0], data_config['optimisation_bounds']['mean_amount_sar'][1])
-        data_config['default']['std_amount_sar'] = trial.suggest_int('std_amount_sar', data_config['optimisation_bounds']['std_amount_sar'][0], data_config['optimisation_bounds']['std_amount_sar'][1])
-        data_config['default']['mean_outcome_sar'] = trial.suggest_int('mean_outcome_sar', data_config['optimisation_bounds']['mean_outcome_sar'][0], data_config['optimisation_bounds']['mean_outcome_sar'][1])
-        data_config['default']['std_outcome_sar'] = trial.suggest_int('std_outcome_sar', data_config['optimisation_bounds']['std_outcome_sar'][0], data_config['optimisation_bounds']['std_outcome_sar'][1])
-        data_config['default']['prob_spend_cash'] = trial.suggest_float('prob_spend_cash', data_config['optimisation_bounds']['prob_spend_cash'][0], data_config['optimisation_bounds']['prob_spend_cash'][1])
-        data_config['default']['mean_phone_change_frequency_sar'] = trial.suggest_int('mean_phone_change_frequency_sar', data_config['optimisation_bounds']['mean_phone_change_frequency_sar'][0], data_config['optimisation_bounds']['mean_phone_change_frequency_sar'][1])
-        data_config['default']['std_phone_change_frequency_sar'] = trial.suggest_int('std_phone_change_frequency_sar', data_config['optimisation_bounds']['std_phone_change_frequency_sar'][0], data_config['optimisation_bounds']['std_phone_change_frequency_sar'][1])
-        data_config['default']['mean_bank_change_frequency_sar'] = trial.suggest_int('mean_bank_change_frequency_sar', data_config['optimisation_bounds']['mean_bank_change_frequency_sar'][0], data_config['optimisation_bounds']['mean_bank_change_frequency_sar'][1])
-        data_config['default']['std_bank_change_frequency_sar'] = trial.suggest_int('std_bank_change_frequency_sar', data_config['optimisation_bounds']['std_bank_change_frequency_sar'][0], data_config['optimisation_bounds']['std_bank_change_frequency_sar'][1])
-        data_config['default']['prob_participate_in_multiple_sars'] = trial.suggest_float('prob_participate_in_multiple_sars', data_config['optimisation_bounds']['prob_participate_in_multiple_sars'][0], data_config['optimisation_bounds']['prob_participate_in_multiple_sars'][1])
+        for k, v in data_config['optimisation_bounds'].items():
+            lower = v[0]
+            upper = v[1]
+            if type(lower) is int:
+                data_config['default'][k] = trial.suggest_int(k, lower, upper)
+            elif type(lower) is float:
+                data_config['default'][k] = trial.suggest_float(k, lower, upper)
+            else:
+                raise ValueError(f'Type {type(lower)} in optimisation bounds not recognised, use int or float.')
         
         with open(self.data_conf_file, 'w') as f:
             json.dump(data_config, f, indent=4)
         
-        tx_log_file = self.generator(self.data_conf_file)
+        tx_log_file = self.generator(os.path.abspath(self.data_conf_file))
         datasets = self.preprocessor(tx_log_file)
         banks = datasets['trainset_nodes']['bank'].unique()
         for bank in banks:
@@ -53,33 +58,40 @@ class Optimizer():
             unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
             df_edges = datasets['testset_edges']
             df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_csv(os.path.join(self.config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'testset_edges.csv'), index=False)
-        for client in self.config[model_type]['isolated']['clients']:
-            os.makedirs(os.path.join(args.results_dir, f'isolated/{model_type}/clients/{client}'), exist_ok=True)
-            storage = 'sqlite:///' + os.path.join(args.results_dir, f'isolated/{model_type}/clients/{client}/hp_study.db')
-            params = config[model_type]['default'] | config[model_type]['isolated']['clients'][client]
-            search_space = config[model_type]['search_space']
+        
+        avg_fpr = 0.0
+        avg_feature_importances_error = 0.0
+        for client in self.config[self.model]['isolated']['clients']:
+            os.makedirs(os.path.join(self.bo_dir, f'isolated/{self.model}/clients/{client}'), exist_ok=True)
+            storage = None # 'sqlite:///' + os.path.join(self.bo_dir, f'isolated/{self.model}/clients/{client}/hp_study.db')
+            params = self.config[self.model]['default'] | self.config[self.model]['isolated']['clients'][client]
+            params['save_fpr'] = True
+            params['save_feature_importances_error'] = True
+            search_space = self.config[self.model]['search_space']
             hyperparamtuner = HyperparamTuner(
                 study_name = 'hp_study',
                 obj_fn = centralized, # OBS: using centralised here but only with data from one client
                 params = params,
                 search_space = search_space,
-                Client = getattr(clients, config[model_type]['default']['client_type']),
-                Model = getattr(models, model_type),
-                seed = args.seed,
-                n_workers = args.n_workers,
+                Client = getattr(clients, self.config[self.model]['default']['client_type']),
+                Model = getattr(models, self.model),
+                seed = self.seed,
+                n_workers = 1,
                 storage = storage
             )
-            best_trials = hyperparamtuner.optimize(n_trials=args.n_trials)
-                
-        classifier = Classifier(dataset, results_dir=self.conf_file.replace('conf.json', ''))
-        model = classifier.train(model=self.model, tune_hyperparameters=True, n_trials=100)
-        score, importances = classifier.evaluate(utility=self.utility)
-
-        avg_importance = importances.mean()
-        avg_importance_error = abs(avg_importance - importances)
-        sum_avg_importance_error = avg_importance_error.sum()
+            best_trials = hyperparamtuner.optimize(n_trials=self.num_trials_model)
+            avg_fpr += hyperparamtuner.fpr / len(self.config[self.model]['isolated']['clients'])
+            avg_feature_importances_error += hyperparamtuner.feature_importances_error / len(self.config[self.model]['isolated']['clients'])
         
-        return abs(score-self.target), sum_avg_importance_error
+        # classifier = Classifier(dataset, results_dir=self.conf_file.replace('conf.json', ''))
+        # model = classifier.train(model=self.model, tune_hyperparameters=True, n_trials=100)
+        # score, importances = classifier.evaluate(utility=self.utility)
+
+        # avg_importance = importances.mean()
+        # avg_importance_error = abs(avg_importance - importances)
+        # sum_avg_importance_error = avg_importance_error.sum()
+        
+        return abs(avg_fpr-self.target), avg_feature_importances_error
     
     def optimize(self, n_trials:int=10):
         parent_dir = '/'.join(self.data_conf_file.split('/')[:-1])

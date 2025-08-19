@@ -1,9 +1,9 @@
 import optuna
 from flib.utils import set_random_seed 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 class HyperparamTuner():
-    def __init__(self, study_name: str, obj_fn: Any, params: Dict, search_space: Dict, Client: Any, Model: Any, Server: Any = None, seed: int = 42, n_workers: int = None, storage: str = None):
+    def __init__(self, study_name: str, obj_fn: Any, params: Dict, search_space: Dict, Client: Any, Model: Any, Server: Any = None, seed: int = 42, n_workers: int = None, storage: str = None, metrics: List[str] = ['average_precision']):
         self.study_name = study_name
         self.obj_fn = obj_fn
         self.seed = seed
@@ -13,7 +13,8 @@ class HyperparamTuner():
         self.Client = Client
         self.Model = Model
         self.params = params
-        self.search_space = search_space 
+        self.search_space = search_space
+        self.metrics = metrics
 
     def objective(self, trial: optuna.Trial):
         kwargs = {}
@@ -28,10 +29,23 @@ class HyperparamTuner():
                 kwargs[param] = self.search_space[param]
         kwargs = self.params | kwargs
         results = self.obj_fn(seed=self.seed, Server=self.Server, Client=self.Client, Model=self.Model, n_workers=self.n_workers, **kwargs)
-        average_precision = 0.0
+        
+        if self.params.get('save_fpr', False) is True:
+            fpr = 0.0
+            for client in results:
+                fpr += results[client].get('fpr') / len(results)
+            self.fpr = fpr
+        if self.params.get('save_feature_importances_error', False) is True:
+            feature_importances_error = 0.0
+            for client in results:
+                feature_importances_error += results[client].get('feature_importances_error') / len(results)
+            self.feature_importances_error = feature_importances_error
+        
+        rets = [0.0] * len(self.metrics)
         for client in results:
-            average_precision += results[client]['valset']['average_precision'][-1] / len(results)        
-        return average_precision
+            for i, metric in enumerate(self.metrics):
+                rets[i] += results[client]['valset'][metric][-1] / len(results)
+        return tuple(rets)
 
     def optimize(self, n_trials=10):
         set_random_seed(self.seed)

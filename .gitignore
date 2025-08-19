@@ -4,7 +4,7 @@ __pycache__
 .venv
 *.egg-info
 .pytest_cache
-experiments
+experiments/*
 *.csv
 *.db
 *.pkl

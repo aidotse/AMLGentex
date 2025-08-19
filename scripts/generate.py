@@ -9,7 +9,7 @@ def main(conf_file: str):
     print(f'\nSynthetic AML data generated\n    Raw transaction log file: {tx_log_file}')
 
 if __name__ == "__main__":
-    EXPERIMENT = '12_banks_easy_big' 
+    EXPERIMENT = '10K_accts' 
     parser = argparse.ArgumentParser()
     parser.add_argument('--conf_file', type=str, help='Path to the config file', default=f'experiments/{EXPERIMENT}/data/param_files/conf.json')
     args = parser.parse_args()

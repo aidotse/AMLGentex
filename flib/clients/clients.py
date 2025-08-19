@@ -5,7 +5,7 @@ import torch_geometric.transforms
 from flib.train import criterions
 from flib.metrics import average_precision_score
 from flib.utils import dataloaders, decrease_lr, filter_args, graphdataset, set_random_seed, tensordatasets
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_recall_curve, precision_score, recall_score, roc_curve
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, precision_recall_curve, precision_score, recall_score, roc_curve, confusion_matrix
 from torch.utils.data import WeightedRandomSampler
 from tqdm import tqdm
 from typing import Any, Dict, List, Tuple
@@ -557,8 +557,21 @@ class SklearnClient():
         self.log(dataset='trainset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
         loss, y_pred, y_true = self.evaluate(dataset='valset')
         self.log(dataset='valset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
+        
+        if kwargs.get('save_fpr', False) is True:
+            y_pred = self.model.predict_proba(self.X_test)[:,1]
+            y_pred = (y_pred > 0.5).astype(int)
+            tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+            fpr = 1.0 if tp+fp == 0 else fp/(fp+tp)
+            self.results['fpr'] = fpr
+
         loss, y_pred, y_true = self.evaluate(dataset='testset')
         self.log(dataset='testset', round=0, loss=loss, y_pred=y_pred, y_true=y_true, metrics=['accuracy', 'average_precision', 'balanced_accuracy', 'f1', 'precision', 'recall', 'precision_recall_curve', 'roc_curve'])
+        
+        if kwargs.get('save_feature_importances_error', False) is True:
+            importances = self.model.feature_importances_
+            error = abs(importances.mean() - importances).sum()
+            self.results['feature_importances_error'] = error
         
         return self.results
     
