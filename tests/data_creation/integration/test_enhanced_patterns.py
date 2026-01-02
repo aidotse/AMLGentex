@@ -93,11 +93,7 @@ class TestScatterGatherPattern:
 
     def test_scatter_gather_has_two_phases(self, alert_transactions):
         """Test that scatter-gather has distinct scatter and gather phases"""
-        # Filter by modelType instead of hardcoded patternID
-        sg_patterns = alert_transactions[alert_transactions['modelType'] == 'scatter_gather']
-        # Use first pattern instance
-        first_pattern_id = sg_patterns['patternID'].min()
-        sg_txs = sg_patterns[sg_patterns['patternID'] == first_pattern_id].sort_values('step')
+        sg_txs = get_first_pattern_txs(alert_transactions, 'scatter_gather')
 
         assert len(sg_txs) > 0, "Scatter-gather pattern should have transactions"
 
