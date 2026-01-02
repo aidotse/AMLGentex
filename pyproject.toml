@@ -63,6 +63,24 @@ markers = [
     "requires_data: Tests that require parameter files",
 ]
 
+[tool.coverage.run]
+omit = [
+    "src/visualize/*",
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "if typing.TYPE_CHECKING:",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
