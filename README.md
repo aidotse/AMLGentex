@@ -6,7 +6,10 @@ AMLGentex is a comprehensive benchmarking framework for anti-money laundering (A
 
 [![arXiv](https://img.shields.io/badge/arXiv-2506.13989-b31b1b.svg)](https://arxiv.org/abs/2506.13989)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Tests](https://github.com/aidotse/AMLGentex/actions/workflows/tests.yml/badge.svg)](https://github.com/aidotse/AMLGentex/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/aidotse/AMLGentex/branch/main/graph/badge.svg)](https://codecov.io/gh/aidotse/AMLGentex)
+[![Downloads](https://static.pepy.tech/badge/amlgentex)](https://pepy.tech/project/amlgentex)
 
 ---
 
@@ -624,17 +627,20 @@ Just organize files following the standard structure, and AMLGentex handles the 
 ```
 AMLGentex/
 ├── src/                        # Core framework code
-│   ├── sim/                    # Transaction simulation
-│   ├── ml/                     # ML models, clients, servers
-│   │   ├── models/            # Model implementations
+│   ├── data_creation/          # Data generation pipeline
+│   │   ├── spatial_simulation/ # Transaction network topology
+│   │   └── temporal_simulation/ # Time-series transaction generation
+│   ├── feature_engineering/    # Feature extraction and preprocessing
+│   ├── data_tuning/           # Bayesian optimization for data parameters
+│   ├── ml/                     # Machine learning models and training
+│   │   ├── models/            # Model implementations (sklearn, torch, GNNs)
 │   │   ├── clients/           # TorchClient, SklearnClient
 │   │   ├── servers/           # TorchServer for federated learning
-│   │   └── metrics/           # Custom metrics
-│   ├── preprocessing/          # Feature engineering
-│   ├── tuning/                # Bayesian optimization
+│   │   ├── training/          # Centralized, federated, isolated training
+│   │   └── metrics/           # Custom evaluation metrics
 │   ├── visualize/             # Plotting and visualization
 │   │   └── transaction_network_explorer/  # Interactive dashboard
-│   └── utils/                 # Configuration, helpers
+│   └── utils/                 # Configuration, helpers, pattern types
 ├── experiments/               # Experiment configurations and results
 │   └── <experiment_name>/
 │       ├── config/           # YAML configs and CSV specifications
@@ -649,7 +655,11 @@ AMLGentex/
 │   ├── tune_data.py          # Two-level Bayesian optimization
 │   ├── tune_hyperparams.py   # Model hyperparameter tuning
 │   └── plot.py               # Generate visualizations
-├── tests/                     # Test suite
+├── tests/                     # Test suite (unit, integration, e2e)
+│   ├── data_creation/        # Tests for spatial and temporal simulation
+│   ├── feature_engineering/  # Tests for preprocessing pipeline
+│   ├── data_tuning/          # Tests for Bayesian optimization
+│   └── ml/                   # Tests for models and training
 ├── tutorial.ipynb            # Comprehensive tutorial notebook
 └── pyproject.toml            # Project dependencies and config
 ```
@@ -711,7 +721,7 @@ If you use AMLGentex in your research, please cite:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
