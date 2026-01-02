@@ -9,7 +9,6 @@ AMLGentex is a comprehensive benchmarking framework for anti-money laundering (A
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Tests](https://github.com/aidotse/AMLGentex/actions/workflows/tests.yml/badge.svg)](https://github.com/aidotse/AMLGentex/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/aidotse/AMLGentex/branch/main/graph/badge.svg)](https://codecov.io/gh/aidotse/AMLGentex)
-[![Downloads](https://static.pepy.tech/badge/amlgentex)](https://pepy.tech/project/amlgentex)
 
 ---
 
