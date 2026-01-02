@@ -1,0 +1,71 @@
+general:
+  simulation_name: large_test
+  random_seed: 42
+  total_steps: 100
+  base_date: '2023-01-01'
+
+input:
+  schema: schema.json
+  accounts: accounts.csv
+  alert_patterns: alertPatterns.csv
+  normal_models: normalModels.csv
+  degree: degree.csv
+  transaction_type: transactionType.csv
+  is_aggregated_accounts: true
+
+temporal:
+  transactions: transactions.csv
+  accounts: accounts.csv
+  alert_members: alert_models.csv
+  normal_models: normal_models.csv
+
+output:
+  transaction_log: tx_log.parquet
+
+spatial:
+
+default:
+  min_amount: 1
+  max_amount: 150000
+  mean_amount: 600
+  std_amount: 250
+  mean_amount_sar: 628
+  std_amount_sar: 279
+  prob_income: 0.0
+  mean_income: 0.0
+  std_income: 0.0
+  prob_income_sar: 0.0
+  mean_income_sar: 0.0
+  std_income_sar: 0.0
+  mean_outcome: 500.0
+  std_outcome: 100.0
+  mean_outcome_sar: 515
+  std_outcome_sar: 139
+  prob_spend_cash: 0.27
+  n_steps_balance_history: 28
+  margin_ratio: 0.1
+  mean_phone_change_frequency: 1460
+  std_phone_change_frequency: 365
+  mean_phone_change_frequency_sar: 1304
+  std_phone_change_frequency_sar: 370
+  mean_bank_change_frequency: 1460
+  std_bank_change_frequency: 365
+  mean_bank_change_frequency_sar: 1305
+  std_bank_change_frequency_sar: 412
+  prob_participate_in_multiple_sars: 0.296
+  mean_duration_normal: 20
+  std_duration_normal: 10
+  mean_duration_alert: 25
+  std_duration_alert: 12
+  burstiness_bias_normal: 0.0
+  burstiness_bias_alert: 0.0
+
+simulator:
+  transaction_limit: 100000000
+  transaction_interval: 7
+  sar_interval: 7
+
+scale-free:
+  gamma: 2.0
+  loc: 1.0
+  average_degree: 2.0

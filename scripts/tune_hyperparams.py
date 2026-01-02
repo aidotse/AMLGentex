@@ -3,8 +3,8 @@ import multiprocessing as mp
 import os
 import time
 import yaml
-from flib import servers, clients, models
-from flib.train import centralized, federated, HyperparamTuner
+from src.ml import servers, clients, models
+from src.ml.training import centralized, federated, HyperparamTuner
 
 def main():
     

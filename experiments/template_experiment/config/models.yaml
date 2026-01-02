@@ -1,0 +1,185 @@
+# Model Training Configuration
+# Controls ML model training and model-level Bayesian optimization
+#
+# NOTE: Convention over configuration - everything is auto-discovered:
+# - Experiment root: Auto-detected from config location (../../ from this file)
+# - Data paths: {experiment_root}/preprocessed/{centralized|clients/{client}}/trainset_{nodes,edges}.parquet
+# - Clients: Auto-discovered from preprocessed/clients/ directory
+#
+# This file contains ONLY hyperparameters for 8 models:
+# - Neural Networks: LogisticRegressor, MLP, GCN, GAT, GraphSAGE
+# - Traditional ML: DecisionTreeClassifier, RandomForestClassifier, GradientBoostingClassifier
+#
+# Each model has:
+# - default: Base hyperparameters used across all settings
+# - search_space: Hyperparameter ranges for Bayesian optimization
+
+LogisticRegressor:
+  default:
+    client_type: TorchClient
+    server_type: TorchServer
+    device: cuda:0
+    valset_size: 0.2
+    testset_size: 0.2
+    lr_patience: 10
+    es_patience: 300
+    n_rounds: 300
+    eval_every: 5
+    n_warmup_rounds: 100
+    batch_size: 512
+    optimizer: Adam
+    criterion: BCEWithLogitsLoss
+    lr: 0.001
+    input_dim: 94
+    output_dim: 1
+  search_space:
+    lr: {type: float, low: 0.00001, high: 0.01, log: true}
+
+MLP:
+  default:
+    client_type: TorchClient
+    server_type: TorchServer
+    device: cuda:0
+    valset_size: 0.2
+    testset_size: 0.2
+    lr_patience: 10
+    es_patience: 300
+    n_rounds: 300
+    eval_every: 5
+    n_warmup_rounds: 100
+    batch_size: 512
+    optimizer: Adam
+    criterion: BCEWithLogitsLoss
+    lr: 0.001
+    weight_decay: 0.1
+    input_dim: 94
+    n_hidden_layers: 3
+    hidden_dim: 100
+    output_dim: 1
+  search_space:
+    lr: {type: float, low: 0.00001, high: 0.01, log: true}
+    weight_decay: {type: float, low: 0.0, high: 1.0}
+    n_hidden_layers: {type: int, low: 1, high: 5}
+    hidden_dim: {type: int, low: 50, high: 300}
+
+GCN:
+  default:
+    client_type: TorchGeometricClient
+    server_type: TorchServer
+    device: cuda:0
+    valset_size: 0.2
+    testset_size: 0.2
+    lr_patience: 10
+    es_patience: 300
+    n_rounds: 300
+    n_warmup_rounds: 100
+    eval_every: 5
+    optimizer: Adam
+    criterion: BCEWithLogitsLoss
+    lr: 0.0001
+    dropout: 0.9
+    input_dim: 94
+    n_conv_layers: 3
+    hidden_dim: 100
+    output_dim: 1
+  search_space:
+    lr: {type: float, low: 0.0001, high: 0.1, log: true}
+    n_conv_layers: {type: int, low: 1, high: 5}
+    hidden_dim: {type: int, low: 100, high: 300}
+    dropout: {type: float, low: 0.2, high: 0.9}
+
+GAT:
+  default:
+    client_type: TorchGeometricClient
+    server_type: TorchServer
+    device: cuda:0
+    valset_size: 0.2
+    testset_size: 0.2
+    lr_patience: 10
+    es_patience: 300
+    n_rounds: 300
+    n_warmup_rounds: 100
+    eval_every: 5
+    optimizer: Adam
+    criterion: BCEWithLogitsLoss
+    lr: 0.0001
+    dropout: 0.9
+    input_dim: 94
+    n_conv_layers: 3
+    hidden_dim: 100
+    output_dim: 1
+  search_space:
+    lr: {type: float, low: 0.0001, high: 0.1, log: true}
+    n_conv_layers: {type: int, low: 1, high: 5}
+    hidden_dim: {type: int, low: 100, high: 300}
+    dropout: {type: float, low: 0.2, high: 0.9}
+
+GraphSAGE:
+  default:
+    client_type: TorchGeometricClient
+    server_type: TorchServer
+    device: cuda:0
+    valset_size: 0.2
+    testset_size: 0.2
+    lr_patience: 10
+    es_patience: 300
+    n_rounds: 300
+    n_warmup_rounds: 100
+    eval_every: 5
+    optimizer: Adam
+    criterion: BCEWithLogitsLoss
+    lr: 0.0001
+    dropout: 0.9
+    input_dim: 94
+    n_conv_layers: 3
+    hidden_dim: 100
+    output_dim: 1
+  search_space:
+    lr: {type: float, low: 0.0001, high: 0.1, log: true}
+    n_conv_layers: {type: int, low: 1, high: 5}
+    hidden_dim: {type: int, low: 100, high: 300}
+    dropout: {type: float, low: 0.2, high: 0.9}
+
+DecisionTreeClassifier:
+  default:
+    client_type: SklearnClient
+    valset_size: 0.2
+    testset_size: 0.2
+    criterion: gini
+    splitter: best
+    random_state: 42
+    class_weight: balanced
+  search_space:
+    criterion: {type: categorical, values: [gini, entropy, log_loss]}
+    splitter: {type: categorical, values: [best, random]}
+    max_depth: {type: int, low: 10, high: 1000}
+
+RandomForestClassifier:
+  default:
+    client_type: SklearnClient
+    valset_size: 0.2
+    testset_size: 0.2
+    n_estimators: 100
+    criterion: gini
+    random_state: 42
+    class_weight: balanced
+  search_space:
+    criterion: {type: categorical, values: [gini, entropy, log_loss]}
+    max_depth: {type: int, low: 10, high: 1000}
+
+GradientBoostingClassifier:
+  default:
+    client_type: SklearnClient
+    valset_size: 0.2
+    testset_size: 0.2
+    loss: log_loss
+    learning_rate: 0.1
+    n_estimators: 100
+    criterion: friedman_mse
+    max_depth: 3
+    random_state: 42
+  search_space:
+    loss: {type: categorical, values: [log_loss, exponential]}
+    learning_rate: {type: float, low: 0.0001, high: 0.1, log: true}
+    criterion: {type: categorical, values: [friedman_mse, squared_error]}
+    max_depth: {type: int, low: 1, high: 10}

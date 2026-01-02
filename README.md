@@ -1,378 +1,732 @@
 # AMLGentex
 
-AMLGentex is a benchmarking suite developed by AI Sweden in collaboration with Handelsbanken and Swedbank. It supports the generation of realistic synthetic transaction data, the training of machine learning models, and the application of explainability techniques. The project aims to provide researchers and practitioners with accessible, high-quality data to advance the development and evaluation of anti-money laundering systems. In particular, the data is loosely based on the mobile payment system SWISH but is easily extended beyond. As illustrated in the figure below, AMLGentex captures a range of real-world data complexities, each assessed in terms of severity by AML experts from Swedbank and Handelsbanken.
+**Mobilizing Data-Driven Research to Combat Money Laundering**
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/ff9c8a04-2344-4f5d-8821-f623464c826c" 
-       width="400" 
-       alt="Key challenges in transaction monitoring for AML based on expert opinions from AML practitioners">
-</p>
+AMLGentex is a comprehensive benchmarking framework for anti-money laundering (AML) research, developed by AI Sweden in collaboration with Handelsbanken and Swedbank. It enables generation of realistic synthetic transaction data, training of machine learning models, and application of explainability techniques to advance AML detection systems.
 
-## Accronyms and definitions
-* SAR: Suspicious Activity Report - accounts or transactions that are labeled as suspisious by the bank
-* SWISH: Swedish Instant Payment System - a mobile payment system used in Sweden
-* AML: Anti-Money Laundering - the process of detecting and preventing money laundering
-* Transaction: A SWISH transaction between two accounts
-* Income: A transaction from a source to and an account (not a SWISH transaction)
-* Outcome: A transaction from an account to a sink (not a SWISH transaction)
-
-## Synthetic Data Generation
-The synthetic data generation is inspired by IBM's AMLSim (https://github.com/IBM/AMLSim) but with extensions in multiple directions. In particular, AMLGentex offers
-* A controlled way to generate scale-free transaction networks (https://en.wikipedia.org/wiki/Scale-free_network) based on three parameters. This provides the user with great control over the in- and out-degree distribution in the network
-* A matching mechanism (heavily updated from AMLSim) where user-defined patterns (both normal and laundering) are sequentially inserted into the network. The normal patterns are only inserted if there is room in the blueprint network (based on the degree distribution) whereas the money laundering patterns are always included. The process is outlined in the figure below.
-* Modelling of in- and out-flow of funds in the network. Funds enter the network by means of salaries and goes out by accounts performing transactions. The income and outcome nodes are denoted as the source and the sink, respectively.
-* A simple statistical model for account behaviour that keeps track of the average balance over a sliding window which determines if the account is likely to spend in the current time. A balance above the average indicates a sense of being resourceful and hence more likely to spend.
-* Money laundering occurs in a three-stage process: placement, layering, integration.
-* Accounts engaging in money laundering have a user-defined probability of engaging in multiple laundering events.
-
-<p align="center">
-  <img width="681" alt="Screenshot 2025-06-25 at 17 13 47" src="https://github.com/user-attachments/assets/85994420-754d-47ff-8107-39bab914d835" />
-</p>
-
-
-
-# AMLsim
-AMLsim is a simulator for generating transaction networks used in anti-money laundering research. It is based on the simulator by IBM (TODO: add link) and is extended to utilize distributions and model behavioural features. This version is designed to generate SWISH data of personal accounts. It can simulate income and outcome for accounts, as well as known transactions patterns of normal and suspisious behaviour. In short, it has two parts: a python part for generating the transaction network and a java part for simulating the behaviour of the agents. The simulation is controlled by 6 parameter files:
-* 1 json file, which defines behviours of accounts and some paths varibles used during the simulation. 
-* 5 csv files, which defines some inital condtions and together defines the structure of the transaction network.
-
-The output of the simulation is a csv file with all the transactions.
-
-
-## Dependencies
-
-Dependencies: python3.7, java, maven
-
-1. clone repo
-2. move into AMlsim folder
-3. install python dependencies: `pip install -r requirements.txt` or `conda env create -f AMLamlsim.yml`
-4. install java dependencies: `mvn install:install-file -Dfile=jars/mason.20.jar -DgroupId=mason -DartifactId=mason -Dversion=20 -Dpackaging=jar -DgeneratePom=true`
-
-## Setup
-
-1. Create a folder for the outputs: `mkdir outputs`
-2. Create a temporary folder for storing pyhton output: `mkdir tmp`
-3. Create a folder for the simulation paramters: `mkdir paramFiles`
-4. In paramFiles create a folder for a new simulation, e.g. `mkdir paramFiles/simulation1`
-5. In the simulation folder, create these files: conf.json, accounts.csv, normalModels.csv, alertPatterns.csv, degree.csv and transactionTypes.csv
-6. Specify the parameters in the files (see below)
-
-## Specify parameters (with examples)
-
-### conf.json
-
-The conf.json file contains parameters for the generel behaviour of the accounts and paths to the other files, the paths are relative to the conf.json file. A example looks like this:
-```
-{
-  "general": {
-    "random_seed": 0,
-    "simulation_name": "simulation1",
-    "total_steps": 86
-  },
-  "default": {
-    "min_amount": 1,
-    "max_amount": 150000,
-    "mean_amount": 637,
-    "std_amount": 1000,
-    "mean_amount_sar": 2000,
-    "std_amount_sar": 1000,
-    "prob_income": 0.05,
-    "mean_income": 500.0,
-    "std_income": 1000.0,
-    "prob_income_sar": 0.05,
-    "mean_income_sar": 500.0,
-    "std_income_sar": 1000.0,
-    "mean_outcome": 200.0,
-    "std_outcome": 500.0,
-    "mean_outcome_sar": 200.0,
-    "std_outcome_sar": 500.0,
-    "prob_spend_cash": 0.7,
-    "n_steps_balance_history": 56,
-    "mean_phone_change_frequency": 1460,
-    "std_phone_change_frequency": 365,
-    "mean_phone_change_frequency_sar": 365,
-    "std_phone_change_frequency_sar": 182,
-    "mean_bank_change_frequency": 1460,
-    "std_bank_change_frequency": 365,
-    "mean_bank_change_frequency_sar": 365,
-    "std_bank_change_frequency_sar": 182,
-    "margin_ratio": 0.1,
-    "prob_participate_in_multiple_sars": 0.1
-  },
-  "input": {
-    "directory": "paramFiles/simulation1",
-    "schema": "schema.json",
-    "accounts": "accounts.csv",
-    "alert_patterns": "alertPatterns.csv",
-    "normal_models": "normalModels.csv",
-    "degree": "degree.csv",
-    "transaction_type": "transactionType.csv",
-    "is_aggregated_accounts": true
-  },
-  "temporal": {
-    "directory": "tmp",
-    "transactions": "transactions.csv",
-    "accounts": "accounts.csv",
-    "alert_members": "alert_members.csv",
-    "normal_models": "normal_models.csv"
-  },
-  "output": {
-    "directory": "outputs",
-    "transaction_log": "tx_log.csv"
-  },
-  "graph_generator": {
-    "degree_threshold": 1
-  },
-  "simulator": {
-    "transaction_limit": 100000,
-    "transaction_interval": 7,
-    "sar_interval": 7
-  },
-  "scale-free": {
-    "gamma": 2.0,
-    "loc": 1.0,
-    "scale": 1.0
-  }
-}
-```
-* **random_seed**
-
-    The random seed is used to make the simulation reproducable.
-
-* **simulation_name**
-
-    The name of the simulation, used for naming the tmp and output folder.
-
-* **total_steps**
-
-    The total number of steps in the simulation. A step is not tied to a specific time unit. However, we typically view one step as a day.
-
-* **min_amount, max_amount, mean_amount, std_amount, mean_amount_sar, std_amount_sar**
-
-    The min and max amount of a transaction, and the mean and standard deviation of the truncated normal distribution used to sample the amount of a transaction, see Fig. 1. The distribution is truncated to zero and current blanace of the account. Mean and std are specifed for normal and SAR transactions, respectively.
-
-    <div align="center">
-    <img src="https://github.com/aidotse/flib/blob/main/resources/gaussian.jpeg" alt="Fig 1. Truncated Gaussian distribution" width="500" height="300">
-    <br>
-    <em>Fig 1. Truncated Gaussian distribution.</em>
-    </div>
-
-* **prob_income, mean_income, std_income, prob_income_sar, mean_income_sar, std_income_sar**
-
-    * These variables are used to set the in-flux of money to the network beyond salaries.  
-  
-    * The probability for an account to recive a transaction in a given time step is given by **prob_income**.
-    Note that this transaction is coming from the source.
-
-    * The size of the transaction is sampled from a truncated Gaussian distribution with mean **mean_income** and standard deviation **std_income**, see Fig. 1.
- 
-    * Influx of money to SAR accounts are handled similarly via **prob_income_sar**, **mean_income_sar**, and **std_income_sar**
- 
-    
-
-* **mean_outcome, std_outcome, mean_outcome_sar, std_outcome_sar, n_steps_balance_history**
-  * The **mean_outcome** and **std_outcome** denote the parameters for a truncated Gaussian distribution used to sample the size of the spending transactions, i.e., transactions going to the sink.
-  * **mean_outcome_sar** and **std_outcome_sar** are similarly parametrizing the sampling distribution for spendings of SAR accounts.
-  * Each account behave individually depending on its balance history. In particular, for each account, the probability of spending in step $t$ is obtained by first deciding if the account is "feeling rich or poor" as
-    $$d_t = \left( x_i - \frac{1}{N}\sum_{j=i-N}^{i} x_j  \right) \text{\huge/} \frac{1}{N}\sum_{j=i-N}^{t} x_j$$
-    where $x_t$ is the account balance in the current time step $t$ and $N$ (n_steps_balance_history) is the number of past steps considered.
-    The spending probability is then obtained from a Sigmoid function as $p_t = 1 / (1 + e^{-d_t})$ whereafter a transaction to the sink is performed if $y=1$ where $y\sim\mathrm{Ber}(p_t)$. See Fig. 2 for an illustration of the procedure.
-
-     <div align="center">
-    <img src="https://github.com/aidotse/flib/blob/main/resources/spending.jpeg" alt="Fig 1. Truncated Gaussian distribution" width="400" height="300">
-    <br>
-    <em>Fig 2. Spending behavior.</em>
-    </div>
-
-* **prob_spend_cash**
-
-    The probability for an account to spend cash. If an account has cash, **prop_spend_cash** will decide if the account spends cash in a outcome transaction. Only sar accounts can spend cash.
-
-* **mean_phone_change_frequency, std_phone_change_frequency, mean_phone_change_frequency_sar, std_phone_change_frequency_sar**
-
-  * **mean_phone_change_frequency** and **std_phone_change_frequency** are used to sample from a truncated Gaussian distribution (rounded to nearest integer) to decide the number of days before an account will change the phone number.
-  * **mean_phone_change_frequency_sar** and **std_phone_change_frequency_sar** serve a similar function as above but for SAR accounts.
-
-* **mean_bank_change_frequency, std_bank_change_frequency, mean_bank_change_frequency_sar, std_bank_change_frequency_sar**
-
-  * **mean_bank_change_frequency** and **std_bank_change_frequency**  are used to sample from a truncated Gaussian distribution (rounded to nearest integer) to decide the number of days before an account will change bank.
- 
-  * **mean_bank_change_frequency_sar** and **std_bank_change_frequency_sar** serve a similar function as above but for SAR accounts.
-
-* **margin_ratio**
-
-    * Whenever an account engages in money laundering, it takes a cut (percentage) of the money given by **margin_ratio**. 
-
-* **prob_participate_in_multiple_sars**
-
-  * The probability for an sar account to participate in multiple SAR patterns. The number of SAR patterns an account can participate in follows the probability mass function of a Log($p$)-distributed random varible
-    $$\mathrm{Pr}[k] = \frac{-p^k}{k\log(1-p)}$$,
-    where $k$ is the number of SAR patterns an account participates in and $p$ is the parameter **prob_participate_in_multiple_sars**.
-
-* **gamma**, **loc**, and **scale**
-  * These parameters are used to generate a [scale-free network](https://en.wikipedia.org/wiki/Scale-free_network)
-  * For large degrees $d$, a scale-free network obeys $\mathrm{Pr}[\text{node degree}=d] \propto d^{-\gamma}$ where $\gamma$ is given by **gamma**
-  * **loc** and **scale** are used to control the degree distribution for smaller values of $d$, i.e., before the power law kicks in
-  * See Fig. 3 for a visualization.
-  <div align="center">
-  <img src="https://github.com/aidotse/flib/blob/main/resources/degree.jpeg" alt="Fig 1. Truncated Gaussian distribution" width="400" height="300">
-  <br>
-  <em>Fig 3. Parameters for the scale-free network.</em>
-  </div>
-    
-
-### account.csv
-
-The accounts.csv file contains the initial conditions for the accounts. It has the following columns:
-* **count**: (int) The number of accounts to generate.
-* **min_balance, max_balance**: (int) The minimum and maximum inital balance of the accounts. The inital balance is sampled from a uniform distribution.
-* **country**: (string) The country of the accounts. 
-* **business_type**: (string) The type of business of the accounts, OBS: currently only "I" is supported.
-* **bank**: (string) The bank of the accounts.
-
-Below is an example where 1000 accounts are generated in two banks with groups of users starting with different initial balances.
-``` 
-count,min_balance,max_balance,country,business_type,bank
-200,1000,10000,SWE,I,bank_a
-200,10000,100000,SWE,I,bank_a
-100,100000,200000,SWE,I,bank_a
-200,1000,10000,SWE,I,bank_b
-200,10000,100000,SWE,I,bank_b
-100,100000,200000,SWE,I,bank_b
-```
-
-### normalModels.csv
-
-normalModels.csv contains the normal transaction-patterns of the accounts. It has the following columns:
-* **count**: (int) The number of patterns to generate.
-* **type**: (string) The type of the pattern. Can be single, fan_out, fan_in, forward, mutual or periodical. Se below for pattern definitions.
-* **schedule_id**: (int) The id of the schedule to use for the pattern. Can be 0, 1, 2 or 3. Se below for schedule definitions.
-* **min_accounts, max_accounts**: (int) The minimum and maximum number of accounts in the pattern. The simulator will find subsets of accounts where the pattern fits and sample from these. The number of subsets will depend on the min and max and on the structure of the network, defined in degree.csv. Some patterns has a fixed number of accounts, se pattern definition for more information.
-* **min_period, max_period**: (int) The minimum and maximum period of the pattern. The period is the number of steps for a pattern to complet. The period is sampled from a uniform distribution.
-* **bank_id**: (int) If specified, the patterns will only include accounts from that bank. If left blank, the patterns can include accounts from any bank specified within accounts.csv.
-
-Below is an example where 2000 different patterns are generated with varying number of accounts and periods. Some patterns are restricted to a specific bank, while others can include several banks.
-```
-count,type,schedule_id,min_accounts,max_accounts,min_period,max_period,bank_id
-100,single,0,2,2,1,84,bank_a
-100,fan_in,1,6,8,21,21,bank_a
-100,fan_out,2,6,10,7,14,bank_a
-100,periodical,3,2,2,1,84,bank_a
-100,single,0,2,2,1,84,bank_b
-100,fan_in,1,6,8,21,21,bank_b
-100,fan_out,2,6,10,7,14,bank_b
-100,periodical,3,2,2,1,84,bank_b
-300,forward,2,3,3,2,4,
-300,mutual,2,2,2,1,10,
-300,fan_out,2,12,16,28,56,
-300,fan_in,2,10,20,56,84
-```
-
-### alertPatterns.csv
-alertPatterns.csv contains the suspisious transaction patterns of the accounts. In contrast to normal models, the alert patterns will be place on top of the normal model transaction network. First the normal models will build a graph according to the degree.csv. Alert patterns will then be add into the graph, completly ignoring the degree.csv file. See (TODO: add section that clarifies this) for more information. alertPatterns.csv has the following columns:
-* **count**: (int) The number of patterns to generate.
-* **type**: (string) The type of the pattern. Can be fan_out, fan_in, cycle, random, bipartite, stack, gather_scatter or scatter_gather. Se below for pattern definitions.
-* **schedule_id**: (int) The id of the schedule to use for the pattern. Can be 0, 1, 2 or 3. Se below for schedule definitions.
-* **min_accounts, max_accounts**: (int) The minimum and maximum number of accounts in the pattern sampled from a uniform distribution. Some patterns has a minumum number of accounts, se pattern definition for more information. 
-* **min_amount, max_amount**: (int) OBS: not used! 
-* **min_period, max_period**: (int) The minimum and maximum period of the pattern. The period is the number of steps for a pattern to complet. The period is sampled from a uniform distribution.
-* **bank_id**: (int) If specified, the patterns will only include accounts from that bank. If left blank, the patterns can include accounts from all banks.
-* **is_sar**: (string) Can be true or false. If true, the pattern will be labeled as suspisious. If false, the pattern will be labeled as normal.
-* **source_type**: (string) Can be CASH or TRANSFER. See (TODO: add section that clarifies this) for more information.
-
-Below is an example with 8 alert patterns:
-```
-count,type,schedule_id,min_accounts,max_accounts,min_amount,max_amount,min_period,max_period,bank_id,is_sar,source_type
-1,fan_out,2,10,20,100,1000,14,28,bank_a,True,CASH
-1,fan_in,2,110,20,100,1000,14,28,bank_b,True,TRANSFER
-1,cycle,2,10,20,100,1000,14,28,,True,TRANSFER
-1,random,2,10,20,100,1000,14,28,,True,CASH
-1,bipartite,2,10,20,100,1000,14,28,,True,TRANSFER
-1,stack,2,10,20,100,1000,14,28,,True,TRANSFER
-1,gather_scatter,2,10,20,100,1000,14,28,,True,CASH
-1,scatter_gather,2,10,20,100,1000,14,28,,True,CASH
-```
-
-### degree.csv
-The degree.csv file defines the structure of the transaction network and can be automatically generated by the script generate_scalefree.py. It has the following columns:
-* **count**: (int) The number of nodes, aka accounts.
-* **In-degree**: (int) The in-degree of the nodes.
-* **Out-degree**: (int) The out-degree of the nodes.
-
-The graph needs to be complete, i.e. the sum of the in-degree and out-degree of all nodes needs to be equal. Further, the total count needs to be equal to the number of accounts in the accounts.csv file. Below is an example for a graph with 1000 nodes.
-```
-count,In-degree,Out-degree
-512,10,10
-256,20,20
-128,30,30
-64,40,40
-32,50,50
-16,60,60
-8,70,70
-4,80,80
-2,90,90
-```
-
-### transactionType.csv
-transactionType.csv defines avalible transaction types. OBS: CURRENTLY ONLY ONE TYPE IS IMPLEMENTED! It has the following columns:
-* **Type**: (string) The type of the transaction. Can only be TRANSFER. 
-* **Frequency**: (int) The frequency of the transaction type used in the transaction network.
-
-Write this in the transactionType.csv file:
-```
-Type,Frequency
-TRANSFER,1
-```
-
-### Network creation
-The network is created according to the following procedure:
-  * **degree.csv** is used as a blueprint for the transaction network
-  * The patterns defined in **normalModels.csv** are iterated and injected into the bluepring network.
-  * Once all the normal transactions are injected into the network, the alert patterns in **alertPatterns.csv** are injected by randomly assigning nodes to become SAR accounts.
-  Note that nodes that are not included in a pattern will be discarded. See Fig. 4 for an illustration of the procedure.
-    <div align="center">
-    <img src="https://github.com/aidotse/flib/blob/main/resources/pattern.jpeg" alt="Fig 4. Truncated Gaussian distribution" width="600" height="300">
-    <br>
-    <em>Fig 4. Network creation.</em>
-    </div>
-
-## Run
-
-
-### Alternative 1: Docker
-Run the docker image with the following command:
-```
-docker run -v /path/to/paramFiles:/app/paramFiles -v /path/to/outputs:/app/outputs thecoldice/amlsim:latest /path/to/conf.json
-```
-
-### Alternative 2: Manual
-1. Run the python script: `python scripts/transaction_graph_generator.py /path/to/conf.json`
-2. Run the java program: `java -jar target/AMLSim-1.0-SNAPSHOT.jar /path/to/conf.json` (unclear if this is will work...)
-
-## Pattern definitions
-To be added.
-
-## Schedule definitions
-The schedual id is used to specify how transactions within a pattern will occur in the temporal dimension. A pattern with more the one transaction can happen over several steps according to a predefined pattern. The schedule id is used to specify this pattern. Below are the four different schedules:
-* **Fixed interval**: id = 0. Each transactions in the pattern will occur sequentially every $k$ time step where $k$ is given by the interval specified in the conf.json file. 
-* **Random interval**: id = 1. A random interval will be generated uniformly within the provided period. Each transactions in the pattern will then occur sequentially.
-* **Unorderd**: id = 2. The transactions in the pattern will be placed in a random order over the period of the pattern.
-* **Simultaneous**: id = 3. All transactions in the pattern will occur at the same time step.
-
+[![arXiv](https://img.shields.io/badge/arXiv-2506.13989-b31b1b.svg)](https://arxiv.org/abs/2506.13989)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
 
-# 
-If you use AMLGentex in your work, please cite the following paper:
+## Terminology
+
+- **SAR**: Suspicious Activity Report - accounts/transactions flagged as suspicious
+- **SWISH**: Swedish Instant Payment System - mobile payment system
+- **AML**: Anti-Money Laundering - detecting and preventing money laundering
+- **Transaction**: payment between two accounts
+- **Income**: Money entering account from external source (salary)
+- **Outcome**: Money leaving account to external sink (spending)
+- **Normal Pattern**: Regular transaction behavior (fan-in, fan-out, mutual, forward, periodical, single)
+- **Alert Pattern**: Suspicious transaction behavior (cycle, bipartite, stack, random, gather-scatter, scatter-gather)
+- **Spatial**: Network topology (who can transact with whom)
+- **Temporal**: Time-series of transactions
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Data Generation](#data-generation)
+  - [Spatial Graph Generation](#spatial-graph-generation)
+  - [Temporal Transaction Simulation](#temporal-transaction-simulation)
+  - [Bayesian Optimization](#bayesian-optimization)
+- [Feature Engineering](#feature-engineering)
+- [Machine Learning](#machine-learning)
+  - [Training Regimes](#training-regimes)
+  - [Supported Models](#supported-models)
+  - [Adding New Models](#adding-new-models)
+- [Configuration Reference](#configuration-reference)
+- [Usage Examples](#usage-examples)
+- [Citation](#citation)
+
+---
+
+## Overview
+
+AMLGentex provides a complete pipeline for generating, training, and evaluating machine learning models for AML detection. The framework is loosely based on the Swedish mobile payment system SWISH but is easily extensible to other payment systems. For a detailed description of the framework and its components, see the [AMLGentex paper](https://arxiv.org/abs/2506.13989) and its appendix.
+
+### Real-World Challenges Addressed
+
+AMLGentex captures a range of real-world data complexities identified by AML experts from Swedbank and Handelsbanken:
+
+<p align="center">
+  <img src="assets/images/radar_plot.png" alt="Severity of challenges addressed by AMLGentex" width="500">
+  <br>
+  <em>Figure 1: Expert-assessed severity of key challenges in AML transaction monitoring</em>
+</p>
+
+The framework models multiple sources of noise and complexity:
+
+<p align="center">
+  <img src="assets/images/noise.png" alt="Types of noise in transaction data" width="600">
+  <br>
+  <em>Figure 2: Different noise types affecting AML detection (label noise, feature drift, etc.)</em>
+</p>
+
+### Key Capabilities
+
+- **Data Generation**: Create realistic synthetic transaction networks with controllable complexity
+- **Pattern Injection**: Insert both normal and suspicious (SAR) transaction patterns
+- **Training Flexibility**: Train models in three settings (centralized, federated, isolated)
+- **Optimization**: Two-level Bayesian optimization for data generation and model hyperparameters
+- **Model Support**: 8 ML models (Decision Trees, Random Forests, GBM, Logistic Regression, MLP, GCN, GAT, GraphSAGE) - easily extensible
+- **Visualization**: Interactive tools for exploring transaction networks
+
+---
+
+## Installation
+
+**Requirements:** Python 3.10+
+
+```bash
+# Clone repository
+git clone https://github.com/aidotse/AMLGentex.git
+cd AMLGentex
+
+# Install dependencies using uv (recommended - fast!)
+pip install uv
+uv sync
+
+# Or use pip
+pip install -e .
+
+# Optional: Install visualization tools
+pip install -e ".[viz]"
+pip install -e ".[network-explorer]"
+```
+
+**Key Dependencies:**
+- `pandas`, `numpy`, `scikit-learn` - Data processing and ML
+- `torch`, `torch_geometric` - Graph neural networks
+- `optuna` - Bayesian optimization
+- `pyarrow` - Parquet file support (4x smaller than CSV)
+- `pyyaml` - Configuration management
+- `panel`, `holoviews`, `datashader` - Interactive visualization
+
+---
+
+## Quick Start
+
+### 📓 Interactive Tutorial (Recommended)
+
+The fastest way to get started is with our comprehensive Jupyter notebook:
+
+```bash
+jupyter notebook tutorial.ipynb
+```
+
+**Tutorial covers:** Creating experiments, generating data, preprocessing, training models, and visualization.
+
+---
+
+### Command-Line Workflow
+
+**Step 1: Generate synthetic data**
+```bash
+uv run python scripts/generate.py --conf_file experiments/10k_accounts/config/data.yaml
+```
+
+**Step 2 (Optional): Optimize data generation**
+```bash
+uv run python scripts/tune_data.py \
+    --experiment_dir experiments/10k_accounts \
+    --num_trials_data 50 \
+    --num_trials_model 100 \
+    --model DecisionTreeClassifier
+```
+
+**Step 3: Engineer features**
+```bash
+uv run python scripts/preprocess.py --conf_file experiments/10k_accounts/config/preprocessing.yaml
+```
+
+**Step 4: Train models**
+```bash
+uv run python scripts/train.py \
+    --experiment_dir experiments/10k_accounts \
+    --model DecisionTreeClassifier \
+    --training_regime centralized
+```
+
+---
+
+## Data Generation
+
+Data generation follows a three-stage process: **spatial graph generation**, **temporal transaction simulation**, and **Bayesian optimization** for parameter tuning.
+
+### Spatial Graph Generation
+
+The spatial stage creates the transaction network topology. This determines which accounts can transact with each other.
+
+#### 1. Scale-Free Network Blueprint
+
+AMLGentex generates scale-free networks where node degree follows a power-law distribution. Three parameters control the topology:
+- **`gamma`**: Power-law exponent (typically 2.0-3.0)
+- **`loc`**: Minimum degree (offset for small degrees)
+- **`average_degree`**: Target mean degree of the network
+
+#### 2. Pattern Injection
+
+**Normal Patterns:** Regular transaction behaviors inserted first, respecting network constraints.
+
+<p align="center">
+  <img src="assets/images/normal_patterns.png" alt="Normal transaction patterns" width="700">
+  <br>
+  <em>Figure 3: Normal transaction patterns - single, fan-in, fan-out, forward, mutual, periodical</em>
+</p>
+
+**Alert Patterns:** Suspicious activities (SAR patterns) inserted on top of the normal network.
+
+<p align="center">
+  <img src="assets/images/alert_patterns.png" alt="Alert transaction patterns" width="700">
+  <br>
+  <em>Figure 4: Alert patterns - fan-in, fan-out, cycle, bipartite, stack, random, gather-scatter, scatter-gather</em>
+</p>
+
+#### 3. Complete Network Creation Pipeline
+
+<p align="center">
+  <img src="assets/images/data_generation_procedure.png" alt="Network creation process" width="700">
+  <br>
+  <em>Figure 5: From degree distribution blueprint to final spatial graph with injected patterns</em>
+</p>
+
+**Configuration:** Spatial graph generation is controlled by `experiments/<name>/config/data.yaml` and CSV files defining:
+- `accounts.csv` - Account properties (balance, bank, country)
+- `degree.csv` - Degree distribution blueprint (auto-generated from `scale-free` parameters if not present)
+- `normalModels.csv` - Normal transaction patterns
+- `alertPatterns.csv` - Suspicious transaction patterns
+
+---
+
+### Temporal Transaction Simulation
+
+Once the spatial graph is created, temporal simulation generates transaction sequences over time.
+
+#### 1. Transaction Amount Modeling
+
+Transaction amounts are sampled from truncated Gaussian distributions with separate parameters for normal and SAR transactions:
+
+<p align="center">
+  <img src="assets/images/truncated_gaussians.png" alt="Truncated Gaussian distributions" width="600">
+  <br>
+  <em>Figure 6: Transaction amount distributions - normal (left) vs SAR (right) transactions</em>
+</p>
+
+#### 2. Transaction Timing System
+
+**Dynamic Duration Sampling:** Each pattern's duration is sampled from a lognormal distribution:
+- `mean_duration_normal/alert` - Controls typical pattern length (in steps, linear space)
+- `std_duration_normal/alert` - Controls duration variability (in steps, linear space)
+- Parameters are automatically converted internally to log-space for lognormal sampling
+- Start time randomly selected within valid range [0, T - duration]
+
+**Note:** The configured duration is the time **window** in which transactions can occur. The actual observed span (first to last transaction) will typically be shorter because transactions are randomly placed within this window.
+
+**Burstiness Control:** Four-level system using beta distributions controls transaction clustering:
+- **Level 1** (Beta(1,1) - Uniform): Near-constant transaction gaps
+- **Level 2** (Beta(2,2) - Symmetric): Regular spacing with some variation
+- **Level 3** (Beta(0.5,3) - Right-skewed): Transactions cluster early in period
+- **Level 4** (Beta(0.3,0.3) - Bimodal): Tight clusters with large gaps between
+
+The `burstiness_bias_normal/alert` parameter provides smooth control over level probabilities using exponential weighting, favoring lower levels (uniform) for negative bias and higher levels (clustered) for positive bias.
+
+#### 3. Account Behavior Modeling
+
+Accounts exhibit realistic spending behavior based on balance history as shown below.
+
+<p align="center">
+  <img src="assets/images/in-out-flows.png" alt="In-flows and out-flows over time" width="600">
+  <br>
+  <em>Figure 7: Temporal dynamics - in-flows (salary) and out-flows (spending) over simulation period</em>
+</p>
+
+#### 4. Money Laundering Typologies
+
+AMLGentex supports two main laundering approaches:
+
+<p align="center">
+  <img src="assets/images/laundering_stages.png" alt="Laundering methods" width="600">
+  <br>
+  <em>Figure 8: (Left) Transfer-based laundering through network, (Right) Cash-based with placement and integration</em>
+</p>
+
+**Transfer-based:** Money flows through the network via account-to-account transfers
+- Placement: Initial deposit
+- Layering: Complex transfers through multiple accounts
+- Integration: Final extraction
+
+**Cash-based:** SAR accounts can inject and extract cash
+- `prob_spend_cash` controls cash usage probability
+- Harder to trace than network transfers as it is invisible to banks
+
+**Configuration:** Temporal simulation is controlled by parameters in `data.yaml`.
+
+**Output:** Transaction log saved as `experiments/<name>/temporal/tx_log.parquet`
+
+---
+
+### Bayesian Optimization
+
+AMLGentex uses **two-level Bayesian optimization** to find optimal data generation parameters and model hyperparameters.
+
+<p align="center">
+  <img src="assets/images/autotuning.png" alt="Two-level Bayesian optimization" width="600">
+  <br>
+  <em>Figure 9: Data-informed optimization finds better data configurations than model-only tuning</em>
+</p>
+
+#### How It Works
+
+```
+For num_trials_data iterations:
+    1. Sample new alert data parameters (mean_amount_sar, prob_spend_cash, etc.)
+    2. Generate synthetic data with those parameters
+    3. Preprocess data
+    4. For num_trials_model iterations:
+        a. Sample model hyperparameters
+        b. Train model
+        c. Evaluate on validation set
+    5. Record best model performance for this data configuration
+    6. Compute data quality score (FPR + feature importance error)
+```
+
+**Objective:** Find data parameters that enable models to:
+1. Achieve a target FPR = 0.01
+2. Minimize feature importance error (correct features should be important)
+
+**Note:** The optimization framework is flexible and easily adapted to:
+- Different objectives (e.g., maximize recall, minimize false negatives, balance multiple metrics)
+- Different parameters (any parameter in `data.yaml` can be added to `optimisation_bounds`)
+- Custom utility functions for domain-specific requirements
+
+**Configuration:** Search spaces defined in `data.yaml` (`optimisation_bounds`) and `models.yaml` (`optimization.search_space`)
+
+**Usage:**
+```bash
+uv run python scripts/tune_data.py \
+    --experiment_dir experiments/10k_accounts \
+    --num_trials_data 50 \
+    --num_trials_model 100 \
+    --model DecisionTreeClassifier \
+    --utility fpr \
+    --seed 0
+```
+
+---
+
+## Feature Engineering
+
+Raw transaction logs are transformed into ML-ready features through windowed temporal aggregation. The framework supports both **transductive** learning (full graph visible, test labels hidden) and **inductive** learning (test nodes completely unseen during training).
+
+<p align="center">
+  <img src="assets/images/blueprint.png" alt="Feature engineering pipeline" width="700">
+  <br>
+  <em>Figure 10: From spatial graph and transactions to windowed node features for ML models</em>
+</p>
+
+### Process
+
+1. **Window Definition:** Divide simulation period into overlapping time windows
+   - `window_len` - Window size in days (e.g., 28 days)
+   - `num_windows` - Number of windows (e.g., 4)
+
+2. **Feature Aggregation:** For each window, compute per-account features:
+   - Transaction counts (sent, received)
+   - Transaction volumes (total amount sent/received)
+   - Network features (in-degree, out-degree)
+   - Balance statistics (mean, std, min, max)
+   - Phone/bank change frequency
+   - Cash usage indicators
+
+3. **Train/Val/Test Splits:** Supports both **transductive** and **inductive** learning
+   - **Transductive**: All accounts seen during training (full graph visible, but test labels hidden)
+   - **Inductive**: Test accounts completely unseen during training (realistic for new accounts)
+   - Time windows can overlap (accounts can appear in multiple splits)
+   - Separate files per bank for federated learning
+
+**Configuration:** `experiments/<name>/config/preprocessing.yaml`
+
+**Output:** Preprocessed features saved to `experiments/<name>/preprocessed/`
+
+---
+
+## Machine Learning
+
+AMLGentex supports training in three regimes with 8 different model types.
+
+### Training Regimes
+
+| Regime | Description | Use Case |
+|--------|-------------|----------|
+| **Centralized** | All banks pool data, train single global model | Maximum performance, no privacy constraints |
+| **Federated** | Banks collaborate without sharing raw data | Privacy-preserving, regulatory compliance |
+| **Isolated** | Each bank trains independently on local data | Full privacy, simple deployment |
+
+**Usage:**
+```bash
+# Centralized
+uv run python scripts/train.py \
+    --experiment_dir experiments/10k_accounts \
+    --model DecisionTreeClassifier \
+    --training_regime centralized
+
+# Federated
+uv run python scripts/train.py \
+    --experiment_dir experiments/10k_accounts \
+    --model GraphSAGE \
+    --training_regime federated
+
+# Isolated
+uv run python scripts/train.py \
+    --experiment_dir experiments/10k_accounts \
+    --model RandomForestClassifier \
+    --training_regime isolated
+```
+
+---
+
+### Supported Models
+
+#### Tabular Models
+- **DecisionTreeClassifier** - Single decision tree
+- **RandomForestClassifier** - Ensemble of decision trees
+- **GradientBoostingClassifier** - Boosted decision trees
+- **LogisticRegression** - Linear classifier
+- **MLP** - Multi-layer perceptron (neural network)
+
+#### Graph Neural Networks
+- **GCN** - Graph Convolutional Network
+- **GAT** - Graph Attention Network
+- **GraphSAGE** - Inductive graph representation learning
+
+**All models support:**
+- Hyperparameter optimization with Optuna
+- Training in all three regimes
+- Custom metrics (average precision @ high recall)
+- Automatic class imbalance handling
+
+---
+
+### Adding New Models
+
+AMLGentex is designed for easy extensibility. To add a new model:
+
+#### PyTorch Models
+
+1. **Create the model class** in `src/ml/models/torch_models.py` (or `gnn_models.py` for GNNs):
+
+```python
+from src.ml.models.base import TorchBaseModel
+import torch
+
+class MyNewModel(TorchBaseModel):
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
+        super(MyNewModel, self).__init__()
+        self.layer1 = torch.nn.Linear(input_dim, hidden_dim)
+        self.layer2 = torch.nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = torch.relu(self.layer1(x))
+        x = self.layer2(x)
+        return x.squeeze()
+```
+
+2. **Export in** `src/ml/models/__init__.py`:
+
+```python
+from src.ml.models.torch_models import MyNewModel
+
+__all__ = [..., 'MyNewModel']
+```
+
+3. **Configure in** `experiments/<name>/config/models.yaml`:
+
+```yaml
+MyNewModel:
+  default:
+    client_type: TorchClient
+    server_type: TorchServer  # For federated learning
+    device: cpu
+    input_dim: 128
+    hidden_dim: 64
+    output_dim: 1
+    lr: 0.001
+    batch_size: 512
+
+  optimization:
+    search_space:
+      hidden_dim:
+        type: int
+        low: 32
+        high: 256
+      lr:
+        type: float
+        low: 0.0001
+        high: 0.01
+        log: true
+```
+
+4. **Train**: Use the same training commands with `--model MyNewModel`
+
+#### Scikit-Learn Models
+
+1. **Import in** `src/ml/models/sklearn_models.py`:
+
+```python
+from sklearn.svm import SVC
+
+__all__ = [..., 'SVC']
+```
+
+2. **Export in** `src/ml/models/__init__.py`:
+
+```python
+from src.ml.models.sklearn_models import SVC
+
+__all__ = [..., 'SVC']
+```
+
+3. **Configure in** `models.yaml`:
+
+```yaml
+SVC:
+  default:
+    client_type: SklearnClient
+    C: 1.0
+    kernel: rbf
+    class_weight: balanced
+
+  optimization:
+    search_space:
+      C:
+        type: float
+        low: 0.001
+        high: 100
+        log: true
+      kernel:
+        type: categorical
+        values: [linear, rbf, poly]
+```
+
+**Note:** Models inheriting from `TorchBaseModel` or `SklearnBaseModel` automatically support:
+- Federated learning (get/set parameters)
+- Hyperparameter optimization
+- All three training regimes
+
+---
+
+### Custom Metrics
+
+AMLGentex includes custom metrics for high-recall scenarios:
+
+- **Average Precision @ High Recall**: Focuses on recall range [0.6, 1.0]
+  - Critical for AML where missing suspicious activities is costly
+- **Balanced Accuracy**: Handles class imbalance
+- **Confusion Matrix**: Custom implementation with correct FP/FN definitions
+
+**Implementation:** `src/ml/metrics/`
+
+---
+
+### Model Configuration
+
+Models are configured in `experiments/<name>/config/models.yaml`:
+
+```yaml
+DecisionTreeClassifier:
+  default:
+    client_type: SklearnClient
+    criterion: gini
+    max_depth: ~
+    class_weight: balanced
+
+  optimization:
+    search_space:
+      criterion:
+        type: categorical
+        values: [gini, entropy, log_loss]
+      max_depth:
+        type: int
+        low: 10
+        high: 1000
+
+GraphSAGE:
+  default:
+    client_type: TorchClient
+    server_type: TorchServer
+    device: cpu
+    hidden_dim: 64
+    num_layers: 2
+    dropout: 0.5
+    lr: 0.001
+    batch_size: 512
+```
+
+---
+
+## Configuration Reference
+
+Experiments are organized under `experiments/<experiment_name>/` with three YAML configuration files.
+
+### Directory Structure
+
+```
+experiments/<experiment_name>/
+├── config/                   # ✅ Committed to Git
+│   ├── data.yaml              # Data generation parameters
+│   ├── preprocessing.yaml     # Feature engineering settings
+│   ├── models.yaml           # Model configurations
+│   ├── accounts.csv          # Account specifications
+│   ├── degree.csv            # Network degree distribution (auto-generated)
+│   ├── normalModels.csv      # Normal pattern definitions
+│   └── alertPatterns.csv     # SAR pattern definitions
+├── spatial/                  # ❌ Generated (ignored by Git)
+├── temporal/                 # ❌ Generated (ignored by Git)
+├── preprocessed/             # ❌ Generated (ignored by Git)
+└── results/                  # ❌ Generated (ignored by Git)
+```
+
+**What gets committed:**
+- ✅ `config/` - All configuration files (YAML and CSV) that define your experiment
+- ❌ `spatial/`, `temporal/`, `preprocessed/`, `results/` - Generated outputs (can be reproduced from config)
+
+This keeps your repository lean while ensuring reproducibility. Anyone can clone the repo and regenerate all outputs by running the pipeline with your committed config files.
+
+**Creating new experiments:** See [`experiments/README.md`](experiments/README.md) for detailed instructions on setting up new experiments.
+
+---
+
+### Convention Over Configuration
+
+AMLGentex uses auto-discovery to minimize manual configuration:
+
+```python
+from src.utils import find_experiment_root, find_clients
+
+# Automatically find experiment directory
+experiment_root = find_experiment_root("10k_accounts")
+
+# Auto-discover client data
+clients = find_clients(experiment_root / "preprocessed" / "clients")
+```
+
+Just organize files following the standard structure, and AMLGentex handles the rest!
+
+---
+
+## Project Structure
+
+```
+AMLGentex/
+├── src/                        # Core framework code
+│   ├── sim/                    # Transaction simulation
+│   ├── ml/                     # ML models, clients, servers
+│   │   ├── models/            # Model implementations
+│   │   ├── clients/           # TorchClient, SklearnClient
+│   │   ├── servers/           # TorchServer for federated learning
+│   │   └── metrics/           # Custom metrics
+│   ├── preprocessing/          # Feature engineering
+│   ├── tuning/                # Bayesian optimization
+│   ├── visualize/             # Plotting and visualization
+│   │   └── transaction_network_explorer/  # Interactive dashboard
+│   └── utils/                 # Configuration, helpers
+├── experiments/               # Experiment configurations and results
+│   └── <experiment_name>/
+│       ├── config/           # YAML configs and CSV specifications
+│       ├── spatial/          # Generated spatial graphs
+│       ├── temporal/         # Transaction logs (Parquet)
+│       ├── preprocessed/     # ML-ready features
+│       └── results/          # Training results and plots
+├── scripts/                   # Executable scripts
+│   ├── generate.py           # Generate synthetic data
+│   ├── preprocess.py         # Feature engineering
+│   ├── train.py              # Train ML models
+│   ├── tune_data.py          # Two-level Bayesian optimization
+│   ├── tune_hyperparams.py   # Model hyperparameter tuning
+│   └── plot.py               # Generate visualizations
+├── tests/                     # Test suite
+├── tutorial.ipynb            # Comprehensive tutorial notebook
+└── pyproject.toml            # Project dependencies and config
+```
+
+---
+
+## Testing
+
+Run the test suite:
+
+```bash
+# All tests
+pytest tests/
+
+# With coverage
+pytest tests/ --cov=src --cov-report=html
+
+# Specific test markers
+pytest -m unit        # Unit tests only
+pytest -m integration # Integration tests only
+pytest -m e2e         # End-to-end tests
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`pytest tests/`)
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+---
+
+## Citation
+
+If you use AMLGentex in your research, please cite:
 
 ```bibtex
 @misc{ostman2025amlgentexmobilizingdatadrivenresearch,
   title     = {AMLgentex: Mobilizing Data-Driven Research to Combat Money Laundering},
-  author    = {Johan \"Ostman and Edvin Callisen and Anton Chen and Kristiina Ausmees and Emanuel G\aardh and Jovan Zamac and Jolanta Goldsteine and Hugo Wefer and Simon Whelan and Markus Reimeg\aard},
+  author    = {Johan \"Ostman and Edvin Callisen and Anton Chen and Kristiina Ausmees and
+               Emanuel G\aardh and Jovan Zamac and Jolanta Goldsteine and Hugo Wefer and
+               Simon Whelan and Markus Reimeg\aard},
   year      = {2025},
   eprint    = {2506.13989},
   archivePrefix = {arXiv},
   primaryClass  = {cs.SI},
   url       = {https://arxiv.org/abs/2506.13989}
 }
+```
 
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+Developed by **AI Sweden** in collaboration with:
+- **Handelsbanken**
+- **Swedbank**
+
+---
+
+## Contact
+
+For questions or issues:
+- Open an issue on [GitHub](https://github.com/aidotse/AMLGentex/issues)
+- Contact: [AI Sweden](https://www.ai.se/)
+
+---

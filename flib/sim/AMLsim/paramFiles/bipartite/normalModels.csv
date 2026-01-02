@@ -1,2 +1,0 @@
-count,type,schedule_id,min_accounts,max_accounts,min_period,max_period,bank_id
-6,single,0,5,5,0,20,bank_a

@@ -4,13 +4,23 @@ __pycache__
 .venv
 *.egg-info
 .pytest_cache
-experiments/*
-*.csv
 *.db
 *.pkl
-flib/sim/AMLsim/outputs
-flib/sim/AMLsim/tmp
-flib/sim/AMLsim/target
-flib/train/federated_learning/results
+src/train/federated_learning/results
 old
-!experiments/12_banks_difficult/data/param_files
+
+# Experiments: Keep config files, ignore generated outputs
+experiments/*/spatial/
+experiments/*/temporal/
+experiments/*/preprocessed/
+experiments/*/results/
+experiments/*/checkpoints/
+
+# Keep config directory and all files within it
+!experiments/*/config/
+!experiments/*/config/**
+
+# Test data: Keep config files, ignore generated outputs
+tests/data_creation/parameters/*/spatial/
+tests/data_creation/parameters/*/temporal/
+tests/data_creation/parameters/temporal/

@@ -1,4 +1,4 @@
-name: Running tests
+name: Tests
 
 on:
   push:
@@ -7,29 +7,55 @@ on:
   pull_request:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      contents: write  # Ensure write permission for contents
+  test:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.10.14        
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies from pyproject.toml
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install .
+          uv pip install --system -e ".[dev]"
 
       - name: Run tests with pytest
-        shell: bash -l {0}
         run: |
-          cd flib/sim/AMLsim
-          set -e
-          pip install pytest pytest-cov coverage-badge
-          pytest --cov-report=term-missing:skip-covered --cov-report=xml --cov-report=html ./tests/ 
+          pytest tests/ \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html \
+            -v
+
+      - name: Upload coverage reports
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage artifacts
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/

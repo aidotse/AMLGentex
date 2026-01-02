@@ -1,0 +1,102 @@
+general:
+  simulation_name: template_experiment
+  random_seed: 0
+  total_steps: 100
+  base_date: '2023-01-01'
+input:
+  schema: schema.json
+  accounts: accounts.csv
+  alert_patterns: alertPatterns.csv
+  normal_models: normalModels.csv
+  degree: degree.csv
+  transaction_type: transactionType.csv
+  is_aggregated_accounts: true
+  directory: /Users/jostman/Projects/AMLGentex/experiments/template_experiment/config
+temporal:
+  transactions: transactions.csv
+  accounts: accounts.csv
+  alert_members: alert_models.csv
+  normal_models: normal_models.csv
+  directory: /Users/jostman/Projects/AMLGentex/experiments/template_experiment/spatial
+output:
+  transaction_log: tx_log.parquet
+  directory: /Users/jostman/Projects/AMLGentex/experiments/template_experiment/temporal
+default:
+  min_amount: 1
+  max_amount: 150000
+  mean_amount: 600
+  std_amount: 250
+  mean_amount_sar: 667
+  std_amount_sar: 207
+  prob_income: 0.0
+  mean_income: 0.0
+  std_income: 0.0
+  prob_income_sar: 0.0
+  mean_income_sar: 0.0
+  std_income_sar: 0.0
+  mean_outcome: 500.0
+  std_outcome: 100.0
+  mean_outcome_sar: 469
+  std_outcome_sar: 199
+  prob_spend_cash: 0.4874046429348234
+  n_steps_balance_history: 28
+  margin_ratio: 0.1
+  mean_phone_change_frequency: 1460
+  std_phone_change_frequency: 365
+  mean_phone_change_frequency_sar: 1403
+  std_phone_change_frequency_sar: 402
+  mean_bank_change_frequency: 1460
+  std_bank_change_frequency: 365
+  mean_bank_change_frequency_sar: 1356
+  std_bank_change_frequency_sar: 352
+  prob_participate_in_multiple_sars: 0.39453025815608794
+  mean_duration_normal: 20
+  std_duration_normal: 10
+  mean_duration_alert: 20
+  std_duration_alert: 3
+  burstiness_bias_normal: 0.0
+  burstiness_bias_alert: 10.0
+optimisation_bounds:
+  mean_amount_sar:
+  - 600
+  - 900
+  std_amount_sar:
+  - 200
+  - 400
+  mean_outcome_sar:
+  - 300
+  - 600
+  std_outcome_sar:
+  - 100
+  - 200
+  prob_spend_cash:
+  - 0.1
+  - 0.5
+  mean_phone_change_frequency_sar:
+  - 1260
+  - 1460
+  std_phone_change_frequency_sar:
+  - 265
+  - 465
+  mean_bank_change_frequency_sar:
+  - 1260
+  - 1460
+  std_bank_change_frequency_sar:
+  - 265
+  - 465
+  prob_participate_in_multiple_sars:
+  - 0.0
+  - 0.5
+  mean_duration_alert:
+  - 10.0
+  - 30.0
+  std_duration_alert:
+  - 5.0
+  - 20.0
+  burstiness_bias_alert:
+  - -4.0
+  - 4.0
+scale-free:
+  gamma: 2.0
+  loc: 1.0
+  average_degree: 2.0

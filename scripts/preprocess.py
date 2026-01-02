@@ -1,53 +1,64 @@
 import argparse
 import os
 import yaml
-from flib.preprocess import DataPreprocessor
+from src.feature_engineering import DataPreprocessor, summarize_dataset
+from src.utils.config import load_preprocessing_config
 from typing import Dict
 
 def main(config: Dict):
-    
-    preprocessor = DataPreprocessor(config['preprocess'])
-    datasets = preprocessor(config['preprocess']['raw_data_file'])
-    
-    os.makedirs(config['preprocess']['preprocessed_data_dir'], exist_ok=True)
-    os.makedirs(os.path.join(config['preprocess']['preprocessed_data_dir'], 'centralized'), exist_ok=True)
-    os.makedirs(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients'), exist_ok=True)
-    
+
+    preprocessor = DataPreprocessor(config)
+    datasets = preprocessor(config['raw_data_file'])
+
+    os.makedirs(config['preprocessed_data_dir'], exist_ok=True)
+    os.makedirs(os.path.join(config['preprocessed_data_dir'], 'centralized'), exist_ok=True)
+    os.makedirs(os.path.join(config['preprocessed_data_dir'], 'clients'), exist_ok=True)
+
     for name, dataset in datasets.items():
-        dataset.to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'centralized', name+'.csv'), index=False)
-    
+        dataset.to_parquet(os.path.join(config['preprocessed_data_dir'], 'centralized', name+'.parquet'), index=False)
+
     banks = datasets['trainset_nodes']['bank'].unique()
     for bank in banks:
-        
-        os.makedirs(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank), exist_ok=True)
-        
+        bank_str = str(bank)
+
+        os.makedirs(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str), exist_ok=True)
+
         df_nodes = datasets['trainset_nodes']
-        df_nodes[df_nodes['bank'] == bank].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'trainset_nodes.csv'), index=False)
-        unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
-        df_edges = datasets['trainset_edges']
-        df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'trainset_edges.csv'), index=False)
-        
+        df_nodes[df_nodes['bank'] == bank].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'trainset_nodes.parquet'), index=False)
+
+        if 'trainset_edges' in datasets:
+            unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
+            df_edges = datasets['trainset_edges']
+            df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'trainset_edges.parquet'), index=False)
+
         df_nodes = datasets['valset_nodes']
-        df_nodes[df_nodes['bank'] == bank].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'valset_nodes.csv'), index=False)
-        unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
-        df_edges = datasets['valset_edges']
-        df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'valset_edges.csv'), index=False)
-        
+        df_nodes[df_nodes['bank'] == bank].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'valset_nodes.parquet'), index=False)
+
+        if 'valset_edges' in datasets:
+            unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
+            df_edges = datasets['valset_edges']
+            df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'valset_edges.parquet'), index=False)
+
         df_nodes = datasets['testset_nodes']
-        df_nodes[df_nodes['bank'] == bank].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'testset_nodes.csv'), index=False)
-        unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
-        df_edges = datasets['testset_edges']
-        df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_csv(os.path.join(config['preprocess']['preprocessed_data_dir'], 'clients', bank, 'testset_edges.csv'), index=False)
-        
+        df_nodes[df_nodes['bank'] == bank].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'testset_nodes.parquet'), index=False)
+
+        if 'testset_edges' in datasets:
+            unique_nodes = df_nodes[df_nodes['bank'] == bank]['account'].unique()
+            df_edges = datasets['testset_edges']
+            df_edges[(df_edges['src'].isin(unique_nodes)) & (df_edges['dst'].isin(unique_nodes))].to_parquet(os.path.join(config['preprocessed_data_dir'], 'clients', bank_str, 'testset_edges.parquet'), index=False)
+
+    # Generate summary statistics
+    summarize_dataset(config['preprocessed_data_dir'], raw_data_file=config['raw_data_file'])
+
 if __name__ == "__main__":
-    
-    EXPERIMENT = '10K_accts'
-    
+
+    EXPERIMENT = '10k_accounts'
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, help='Path to the config file.', default=f'experiments/{EXPERIMENT}/config.yaml')
+    parser.add_argument('--config', type=str, help='Path to preprocessing config file.', default=f'experiments/{EXPERIMENT}/config/preprocessing.yaml')
     args = parser.parse_args()
-    
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
-    
+
+    # Load config with auto-discovered paths
+    config = load_preprocessing_config(args.config)
+
     main(config)

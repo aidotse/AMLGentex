@@ -1,8 +1,0 @@
-count,type,schedule_id,min_accounts,max_accounts,min_amount,max_amount,min_period,max_period,bank_id,is_sar,source_type
-2,fan_out,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,fan_in,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,cycle,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,bipartite,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,stack,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,scatter_gather,2,7,7,100,1000,14,28,bank,True,TRANSFER
-2,gather_scatter,2,7,7,100,1000,14,28,bank,True,TRANSFER

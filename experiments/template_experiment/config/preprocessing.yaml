@@ -1,0 +1,24 @@
+# Preprocessing Configuration
+# Controls feature engineering from raw transaction data
+#
+# NOTE: Convention over configuration - paths are auto-discovered:
+# - Experiment root: Auto-detected from config location (../../ from this file)
+# - Raw data file: {experiment_root}/temporal/tx_log.parquet
+# - Preprocessed data directory: {experiment_root}/preprocessed
+
+# Paths auto-constructed based on experiment root (no need to specify)
+
+# Time window aggregation for features
+num_windows: 4
+window_len: 25  # days
+
+# Train/val/test splits (inductive learning - can overlap)
+train_start_step: 0
+train_end_step: 100
+val_start_step: 0
+val_end_step: 100
+test_start_step: 0
+test_end_step: 100
+
+# Include transaction graph edges in features
+include_edges: false

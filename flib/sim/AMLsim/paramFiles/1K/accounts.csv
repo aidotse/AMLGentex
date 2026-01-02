@@ -1,7 +1,0 @@
-count,min_balance,max_balance,country,business_type,bank_id
-200,50000,100000,US,I,bank_a
-200,50000,100000,US,I,bank_b
-200,50000,100000,US,I,bank_c
-200,50000,100000,US,I,bank_d
-200,50000,100000,US,I,bank_e
-446,50000,100000,US,I,bank_f

@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import multiprocessing as mp
 import numpy as np
 import yaml
-from flib import servers, clients, models
-from flib.train import centralized, federated, isolated
-from flib.utils import get_optimal_params
+from src.ml import servers, clients, models
+from src.ml.training import centralized, federated, isolated
+from src.utils import get_optimal_params
 
 
 def main():

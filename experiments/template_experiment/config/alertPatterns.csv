@@ -1,0 +1,8 @@
+count,type,min_accounts,max_accounts,bank_id,is_sar,source_type
+10,fan_out,3,15,,true,TRANSFER
+10,fan_in,3,15,,true,TRANSFER
+10,cycle,3,10,,true,TRANSFER
+10,bipartite,4,15,,true,TRANSFER
+10,stack,3,15,,true,TRANSFER
+10,scatter_gather,3,15,,true,CASH
+10,gather_scatter,3,15,,true,CASH

@@ -1,4 +1,0 @@
-Use this code to train various statistical models
-
-in main() define the dataset and results folder
-Also put what models to train, the dataset names, and ratios of noise in the datasets (these needs to be pre-made).
