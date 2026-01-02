@@ -69,9 +69,9 @@ class TestScatterGatherPattern:
 
     def test_scatter_gather_has_two_phases(self, alert_transactions):
         """Test that scatter-gather has distinct scatter and gather phases"""
-        # Scatter-gather patterns are alertID 50-59 (10 patterns)
+        # Scatter-gather patterns are patternID 50-59 (10 patterns)
         # Use first scatter-gather pattern
-        sg_txs = alert_transactions[alert_transactions['alertID'] == 50].sort_values('step')
+        sg_txs = alert_transactions[alert_transactions['patternID'] == 50].sort_values('step')
 
         assert len(sg_txs) > 0, "Scatter-gather pattern should have transactions"
 
@@ -87,7 +87,7 @@ class TestScatterGatherPattern:
 
     def test_scatter_gather_amount_splitting(self, alert_transactions):
         """Test that intermediaries properly split received amounts with margin"""
-        sg_txs = alert_transactions[alert_transactions['alertID'] == 50].sort_values('step')
+        sg_txs = alert_transactions[alert_transactions['patternID'] == 50].sort_values('step')
 
         # Check each intermediary that both receives and sends
         receivers = set(sg_txs['nameDest'].unique())
@@ -115,7 +115,7 @@ class TestScatterGatherPattern:
 
     def test_scatter_gather_random_connections(self, alert_transactions):
         """Test that intermediaries have random connections (not all-to-all)"""
-        sg_txs = alert_transactions[alert_transactions['alertID'] == 50].sort_values('step')
+        sg_txs = alert_transactions[alert_transactions['patternID'] == 50].sort_values('step')
 
         # Get time midpoint
         midpoint = (sg_txs['step'].min() + sg_txs['step'].max()) / 2
@@ -129,7 +129,7 @@ class TestScatterGatherPattern:
 
     def test_scatter_gather_three_phase_structure(self, alert_transactions):
         """Test that scatter-gather uses 3 distinct phases: originators, intermediaries, beneficiaries"""
-        sg_txs = alert_transactions[alert_transactions['alertID'] == 50].sort_values('step')
+        sg_txs = alert_transactions[alert_transactions['patternID'] == 50].sort_values('step')
 
         midpoint = (sg_txs['step'].min() + sg_txs['step'].max()) / 2
 
@@ -156,9 +156,9 @@ class TestGatherScatterPattern:
 
     def test_gather_scatter_has_two_phases(self, alert_transactions):
         """Test that gather-scatter has distinct gather and scatter phases"""
-        # Gather-scatter patterns are alertID 60-69 (10 patterns)
+        # Gather-scatter patterns are patternID 60-69 (10 patterns)
         # Use first gather-scatter pattern
-        gs_txs = alert_transactions[alert_transactions['alertID'] == 60].sort_values('step')
+        gs_txs = alert_transactions[alert_transactions['patternID'] == 60].sort_values('step')
 
         assert len(gs_txs) > 0, "Gather-scatter pattern should have transactions"
 
@@ -174,7 +174,7 @@ class TestGatherScatterPattern:
 
     def test_gather_scatter_amount_splitting(self, alert_transactions):
         """Test that hubs properly split received amounts with margin"""
-        gs_txs = alert_transactions[alert_transactions['alertID'] == 60].sort_values('step')
+        gs_txs = alert_transactions[alert_transactions['patternID'] == 60].sort_values('step')
 
         # Check each hub that both receives and sends
         receivers = set(gs_txs['nameDest'].unique())
@@ -202,7 +202,7 @@ class TestGatherScatterPattern:
 
     def test_gather_scatter_random_connections(self, alert_transactions):
         """Test that hubs have random connections (not all-to-all)"""
-        gs_txs = alert_transactions[alert_transactions['alertID'] == 60].sort_values('step')
+        gs_txs = alert_transactions[alert_transactions['patternID'] == 60].sort_values('step')
 
         # Get time midpoint
         midpoint = (gs_txs['step'].min() + gs_txs['step'].max()) / 2
@@ -216,7 +216,7 @@ class TestGatherScatterPattern:
 
     def test_gather_scatter_three_phase_structure(self, alert_transactions):
         """Test that gather-scatter uses 3 distinct roles: sources, hubs, targets"""
-        gs_txs = alert_transactions[alert_transactions['alertID'] == 60].sort_values('step')
+        gs_txs = alert_transactions[alert_transactions['patternID'] == 60].sort_values('step')
 
         midpoint = (gs_txs['step'].min() + gs_txs['step'].max()) / 2
 
@@ -243,9 +243,9 @@ class TestStackPattern:
 
     def test_stack_has_multiple_layers(self, alert_transactions):
         """Test that stack pattern has multiple distinct layers"""
-        # Stack patterns are alertID 30-39 (10 patterns)
+        # Stack patterns are patternID 30-39 (10 patterns)
         # Use first stack pattern
-        stack_txs = alert_transactions[alert_transactions['alertID'] == 30].sort_values('step')
+        stack_txs = alert_transactions[alert_transactions['patternID'] == 30].sort_values('step')
 
         assert len(stack_txs) > 0, "Stack pattern should have transactions"
 
@@ -255,7 +255,7 @@ class TestStackPattern:
 
     def test_stack_amount_splitting(self, alert_transactions):
         """Test that accounts in stack properly split received amounts with margin"""
-        stack_txs = alert_transactions[alert_transactions['alertID'] == 30].sort_values('step')
+        stack_txs = alert_transactions[alert_transactions['patternID'] == 30].sort_values('step')
 
         # For each account that both receives and sends
         accounts_receive = set(stack_txs['nameDest'].unique())
@@ -283,7 +283,7 @@ class TestStackPattern:
 
     def test_stack_layered_flow(self, alert_transactions):
         """Test that transactions flow through layers sequentially"""
-        stack_txs = alert_transactions[alert_transactions['alertID'] == 30].sort_values('step')
+        stack_txs = alert_transactions[alert_transactions['patternID'] == 30].sort_values('step')
 
         # Each account should receive before it sends
         accounts_both = set(stack_txs['nameDest'].unique()) & set(stack_txs['nameOrig'].unique())
@@ -298,7 +298,7 @@ class TestStackPattern:
 
     def test_stack_random_connections(self, alert_transactions):
         """Test that accounts have random connections to next layer (not all-to-all)"""
-        stack_txs = alert_transactions[alert_transactions['alertID'] == 30].sort_values('step')
+        stack_txs = alert_transactions[alert_transactions['patternID'] == 30].sort_values('step')
 
         # Each sending account should connect to 1-3 accounts in next layer
         for sender in stack_txs['nameOrig'].unique():
@@ -314,24 +314,24 @@ class TestAmountConservation:
 
     def test_total_amounts_reasonable(self, alert_transactions):
         """Test that total transaction amounts are within reasonable bounds"""
-        for alert_id in alert_transactions['alertID'].unique():
-            alert_txs = alert_transactions[alert_transactions['alertID'] == alert_id]
+        for pattern_id in alert_transactions['patternID'].unique():
+            alert_txs = alert_transactions[alert_transactions['patternID'] == pattern_id]
             total_amount = alert_txs['amount'].sum()
 
             # Total should be positive and within configured bounds
-            assert total_amount > 0, f"Alert {alert_id} should have positive total amount"
+            assert total_amount > 0, f"Alert {pattern_id} should have positive total amount"
 
             # Each individual transaction should be within bounds
-            assert alert_txs['amount'].min() >= 1, f"Alert {alert_id} min amount should be >= 1"
-            assert alert_txs['amount'].max() <= 150000, f"Alert {alert_id} max amount should be <= 150000"
+            assert alert_txs['amount'].min() >= 1, f"Alert {pattern_id} min amount should be >= 1"
+            assert alert_txs['amount'].max() <= 150000, f"Alert {pattern_id} max amount should be <= 150000"
 
     def test_margin_ratio_applied_consistently(self, alert_transactions):
         """Test that 10% margin ratio is applied consistently across all patterns"""
         margin_ratio = 0.1
         tolerance = 1.0  # Allow $1 tolerance for floating point
 
-        for alert_id in [30, 50, 60]:  # Stack, scatter-gather, gather-scatter
-            alert_txs = alert_transactions[alert_transactions['alertID'] == alert_id].sort_values('step')
+        for pattern_id in [30, 50, 60]:  # Stack, scatter-gather, gather-scatter
+            alert_txs = alert_transactions[alert_transactions['patternID'] == pattern_id].sort_values('step')
 
             # Find accounts that both receive and send
             receivers = set(alert_txs['nameDest'].unique())
@@ -350,4 +350,4 @@ class TestAmountConservation:
                     expected = received * (1 - margin_ratio)
 
                     assert abs(sent - expected) < tolerance, \
-                        f"Alert {alert_id}, Account {account}: {sent:.2f} sent != {expected:.2f} expected (90% of {received:.2f})"
+                        f"Alert {pattern_id}, Account {account}: {sent:.2f} sent != {expected:.2f} expected (90% of {received:.2f})"

@@ -4,12 +4,8 @@ Tests realistic salary sampling based on dummy statistics
 """
 import pytest
 import numpy as np
-import sys
 import tempfile
 import os
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / 'python'))
 
 from src.data_creation.temporal_simulation.salary_distribution import SalaryDistribution
 
@@ -41,7 +37,7 @@ def salary_csv():
 def dist(salary_csv):
     """Create a SalaryDistribution instance with dummy data"""
     # Clear cache to ensure fresh load
-    import src.data_creation.python.temporal_simulation.salary_distribution as sd_module
+    import src.data_creation.temporal_simulation.salary_distribution as sd_module
     sd_module._SALARY_DISTRIBUTION_CACHE = None
 
     return SalaryDistribution(csv_path=salary_csv)
@@ -207,7 +203,7 @@ class TestSalaryDistribution:
     def test_caching_mechanism(self, salary_csv):
         """Test that data is cached and reused"""
         # Clear cache first
-        import src.data_creation.python.temporal_simulation.salary_distribution as sd_module
+        import src.data_creation.temporal_simulation.salary_distribution as sd_module
         sd_module._SALARY_DISTRIBUTION_CACHE = None
 
         # Create first instance (loads data)
