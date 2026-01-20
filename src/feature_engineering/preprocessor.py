@@ -1,5 +1,87 @@
 import pandas as pd
 import numpy as np
+from scipy import stats
+
+
+def _calc_timing_agg(steps: pd.Series) -> pd.Series:
+    """
+    Calculate timing distribution features for a group of transactions.
+
+    Returns Series with:
+    - first_step: time of first transaction
+    - last_step: time of last transaction
+    - time_span: range between first and last
+    - time_std: standard deviation of transaction times
+    - time_skew: skewness (positive = clustered late, negative = clustered early)
+    - burstiness: measure of temporal concentration (0 = evenly distributed, 1 = all at once)
+    """
+    vals = steps.values
+    n = len(vals)
+
+    if n == 0:
+        return pd.Series({
+            'first_step': np.nan, 'last_step': np.nan, 'time_span': np.nan,
+            'time_std': np.nan, 'time_skew': np.nan, 'burstiness': np.nan,
+        })
+
+    first_step = vals.min()
+    last_step = vals.max()
+    time_span = last_step - first_step
+
+    if n == 1:
+        return pd.Series({
+            'first_step': first_step, 'last_step': last_step, 'time_span': 0.0,
+            'time_std': 0.0, 'time_skew': 0.0, 'burstiness': 1.0,
+        })
+
+    time_std = np.std(vals)
+    time_skew = stats.skew(vals) if time_std > 0 else 0.0
+
+    # Burstiness: B = (std - mean) / (std + mean), ranges from -1 to 1
+    sorted_vals = np.sort(vals)
+    gaps = np.diff(sorted_vals)
+    if len(gaps) > 0 and gaps.mean() > 0:
+        gap_std = gaps.std()
+        gap_mean = gaps.mean()
+        burstiness = (gap_std - gap_mean) / (gap_std + gap_mean) if (gap_std + gap_mean) > 0 else 0.0
+    else:
+        burstiness = 0.0
+
+    return pd.Series({
+        'first_step': first_step, 'last_step': last_step, 'time_span': time_span,
+        'time_std': time_std, 'time_skew': time_skew, 'burstiness': burstiness,
+    })
+
+
+def _calc_gap_agg(steps: pd.Series) -> pd.Series:
+    """
+    Calculate inter-transaction gap features for a group of transactions.
+
+    Returns Series with:
+    - mean_gap: average time between consecutive transactions
+    - median_gap: median time between consecutive transactions
+    - std_gap: standard deviation of gaps
+    - max_gap: longest gap between transactions
+    - min_gap: shortest gap between transactions
+    """
+    vals = steps.values
+    n = len(vals)
+
+    if n < 2:
+        return pd.Series({
+            'mean_gap': np.nan, 'median_gap': np.nan, 'std_gap': np.nan,
+            'max_gap': np.nan, 'min_gap': np.nan,
+        })
+
+    sorted_vals = np.sort(vals)
+    gaps = np.diff(sorted_vals)
+
+    return pd.Series({
+        'mean_gap': gaps.mean(), 'median_gap': np.median(gaps),
+        'std_gap': gaps.std() if len(gaps) > 1 else 0.0,
+        'max_gap': gaps.max(), 'min_gap': gaps.min(),
+    })
+
 
 class DataPreprocessor:
     def __init__(self, config, verbose: bool = True):
@@ -147,7 +229,9 @@ class DataPreprocessor:
             node_features[f'maxs_spending_{window[0]}_{window[1]}'] = gb_spending['amount'].max()
             node_features[f'mins_spending_{window[0]}_{window[1]}'] = gb_spending['amount'].min()
             node_features[f'counts_spending_{window[0]}_{window[1]}'] = gb_spending['amount'].count()
-            gb_in = df_in[(df_in['step']>=window[0])&(df_in['step']<=window[1])].groupby(['account'])
+            # Incoming transaction features
+            df_in_window = df_in[(df_in['step']>=window[0])&(df_in['step']<=window[1])]
+            gb_in = df_in_window.groupby(['account'])
             node_features[f'sum_in_{window[0]}_{window[1]}'] = gb_in['amount'].apply(lambda x: x[x > 0].sum())
             node_features[f'mean_in_{window[0]}_{window[1]}'] = gb_in['amount'].mean()
             node_features[f'median_in_{window[0]}_{window[1]}'] = gb_in['amount'].median()
@@ -156,7 +240,25 @@ class DataPreprocessor:
             node_features[f'min_in_{window[0]}_{window[1]}'] = gb_in['amount'].min()
             node_features[f'count_in_{window[0]}_{window[1]}'] = gb_in['amount'].count()
             node_features[f'count_unique_in_{window[0]}_{window[1]}'] = gb_in['counterpart'].nunique()
-            gb_out = df_out[(df_out['step']>=window[0])&(df_out['step']<=window[1])].groupby(['account'])
+            # Timing features for incoming transactions
+            if len(df_in_window) > 0:
+                timing_in_raw = gb_in['step'].apply(_calc_timing_agg)
+                if isinstance(timing_in_raw.index, pd.MultiIndex):
+                    timing_in = timing_in_raw.unstack()
+                    for feat in ['first_step', 'last_step', 'time_span', 'time_std', 'time_skew', 'burstiness']:
+                        if feat in timing_in.columns:
+                            node_features[f'{feat}_in_{window[0]}_{window[1]}'] = timing_in[feat]
+                # Gap features for incoming transactions
+                gap_in_raw = gb_in['step'].apply(_calc_gap_agg)
+                if isinstance(gap_in_raw.index, pd.MultiIndex):
+                    gap_in = gap_in_raw.unstack()
+                    for feat in ['mean_gap', 'median_gap', 'std_gap', 'max_gap', 'min_gap']:
+                        if feat in gap_in.columns:
+                            node_features[f'{feat}_in_{window[0]}_{window[1]}'] = gap_in[feat]
+
+            # Outgoing transaction features
+            df_out_window = df_out[(df_out['step']>=window[0])&(df_out['step']<=window[1])]
+            gb_out = df_out_window.groupby(['account'])
             node_features[f'sum_out_{window[0]}_{window[1]}'] = gb_out['amount'].apply(lambda x: x[x > 0].sum())
             node_features[f'mean_out_{window[0]}_{window[1]}'] = gb_out['amount'].mean()
             node_features[f'median_out_{window[0]}_{window[1]}'] = gb_out['amount'].median()
@@ -165,6 +267,62 @@ class DataPreprocessor:
             node_features[f'min_out_{window[0]}_{window[1]}'] = gb_out['amount'].min()
             node_features[f'count_out_{window[0]}_{window[1]}'] = gb_out['amount'].count()
             node_features[f'count_unique_out_{window[0]}_{window[1]}'] = gb_out['counterpart'].nunique()
+            # Timing features for outgoing transactions
+            if len(df_out_window) > 0:
+                timing_out_raw = gb_out['step'].apply(_calc_timing_agg)
+                if isinstance(timing_out_raw.index, pd.MultiIndex):
+                    timing_out = timing_out_raw.unstack()
+                    for feat in ['first_step', 'last_step', 'time_span', 'time_std', 'time_skew', 'burstiness']:
+                        if feat in timing_out.columns:
+                            node_features[f'{feat}_out_{window[0]}_{window[1]}'] = timing_out[feat]
+                # Gap features for outgoing transactions
+                gap_out_raw = gb_out['step'].apply(_calc_gap_agg)
+                if isinstance(gap_out_raw.index, pd.MultiIndex):
+                    gap_out = gap_out_raw.unstack()
+                    for feat in ['mean_gap', 'median_gap', 'std_gap', 'max_gap', 'min_gap']:
+                        if feat in gap_out.columns:
+                            node_features[f'{feat}_out_{window[0]}_{window[1]}'] = gap_out[feat]
+        # Calculate inter-window timing features (patterns across windows)
+        if len(windows) > 1:
+            # Collect per-window counts for inter-window analysis
+            in_counts_per_window = []
+            out_counts_per_window = []
+            for window in windows:
+                in_count_col = f'count_in_{window[0]}_{window[1]}'
+                out_count_col = f'count_out_{window[0]}_{window[1]}'
+                if in_count_col in node_features:
+                    in_counts_per_window.append(node_features[in_count_col])
+                if out_count_col in node_features:
+                    out_counts_per_window.append(node_features[out_count_col])
+
+            # Number of active windows (windows with at least one transaction)
+            if in_counts_per_window:
+                in_counts_df = pd.concat(in_counts_per_window, axis=1).fillna(0)
+                node_features['n_active_windows_in'] = (in_counts_df > 0).sum(axis=1)
+                # Activity consistency: coefficient of variation across windows
+                in_means = in_counts_df.mean(axis=1)
+                in_stds = in_counts_df.std(axis=1)
+                node_features['window_activity_cv_in'] = (in_stds / in_means).replace([np.inf, -np.inf], 0).fillna(0)
+                # Volume trend: correlation with window index (positive = increasing activity)
+                window_indices = np.arange(len(windows))
+                def calc_trend(row):
+                    if row.std() == 0:
+                        return 0.0
+                    return np.corrcoef(window_indices, row.values)[0, 1] if len(row) > 1 else 0.0
+                node_features['volume_trend_in'] = in_counts_df.apply(calc_trend, axis=1).fillna(0)
+
+            if out_counts_per_window:
+                out_counts_df = pd.concat(out_counts_per_window, axis=1).fillna(0)
+                node_features['n_active_windows_out'] = (out_counts_df > 0).sum(axis=1)
+                out_means = out_counts_df.mean(axis=1)
+                out_stds = out_counts_df.std(axis=1)
+                node_features['window_activity_cv_out'] = (out_stds / out_means).replace([np.inf, -np.inf], 0).fillna(0)
+                def calc_trend(row):
+                    if row.std() == 0:
+                        return 0.0
+                    return np.corrcoef(window_indices, row.values)[0, 1] if len(row) > 1 else 0.0
+                node_features['volume_trend_out'] = out_counts_df.apply(calc_trend, axis=1).fillna(0)
+
         # calculate non window related features
         combine_cols = ['account', 'days_in_bank', 'n_phone_changes', 'is_sar']
         if self.split_by_pattern and 'pattern_id' in df_in.columns:
@@ -196,12 +354,21 @@ class DataPreprocessor:
         df_nodes = df_nodes.fillna(0.0).infer_objects(copy=False)
         # check if there is any missing values
         assert df_nodes.isnull().sum().sum() == 0, 'There are missing values in the node features'
-        # check if there are any negative values in feature columns
-        # (exclude bank and pattern_id which can have non-feature values)
-        exclude_cols = ['bank']
-        if 'pattern_id' in df_nodes.columns:
-            exclude_cols.append('pattern_id')
-        assert (df_nodes.drop(columns=exclude_cols) < 0).sum().sum() == 0, 'There are negative values in the node features'
+        # Validate feature values
+        # 1. Amount-based features must be non-negative
+        amount_cols = [col for col in df_nodes.columns
+                      if col not in ['account', 'bank', 'pattern_id', 'is_sar']
+                      and not any(p in col for p in ['burstiness_', 'time_skew_', 'volume_trend_'])]
+        assert (df_nodes[amount_cols] < 0).sum().sum() == 0, 'There are negative values in amount-based features'
+
+        # 2. Timing features that can be negative should be bounded
+        # burstiness and volume_trend are bounded [-1, 1], time_skew is typically [-3, 3]
+        bounded_cols = [col for col in df_nodes.columns if 'burstiness_' in col or 'volume_trend_' in col]
+        if bounded_cols:
+            assert (df_nodes[bounded_cols].abs() <= 1.0).all().all(), 'Burstiness/trend features out of [-1, 1] range'
+        skew_cols = [col for col in df_nodes.columns if 'time_skew_' in col]
+        if skew_cols:
+            assert (df_nodes[skew_cols].abs() <= 10.0).all().all(), 'Time skew features have extreme values'
         return df_nodes
     
     

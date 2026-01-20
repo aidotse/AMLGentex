@@ -124,7 +124,7 @@ class TestCalNodeFeatures:
         assert df_nodes.isnull().sum().sum() == 0
 
     def test_cal_node_features_no_negative_values(self, basic_preprocessor_config, sample_transactions_df):
-        """Test that there are no negative values (except bank column)"""
+        """Test that there are no negative values (except bank and timing features that can be negative)"""
         preprocessor = DataPreprocessor(basic_preprocessor_config)
         df_nodes = preprocessor.cal_node_features(
             sample_transactions_df,
@@ -132,9 +132,16 @@ class TestCalNodeFeatures:
             end_step=15
         )
 
-        # Check no negative values in numeric columns (excluding bank)
+        # Check no negative values in numeric columns
+        # Exclude timing features that can legitimately be negative:
+        # - burstiness_* ranges from -1 to 1
+        # - time_skew_* can be negative (left-skewed distributions)
+        # - volume_trend_* is a correlation coefficient (-1 to 1)
         numeric_cols = df_nodes.select_dtypes(include=[np.number]).columns
-        assert (df_nodes[numeric_cols] >= 0).all().all()
+        timing_negative_patterns = ['burstiness_', 'time_skew_', 'volume_trend_']
+        amount_cols = [col for col in numeric_cols
+                       if not any(p in col for p in timing_negative_patterns)]
+        assert (df_nodes[amount_cols] >= 0).all().all()
 
     def test_cal_node_features_are_unique(self, basic_preprocessor_config, sample_transactions_df):
         """Test that all nodes have unique feature vectors"""
