@@ -26,8 +26,8 @@ default:
   max_amount: 150000
   mean_amount: 600
   std_amount: 250
-  mean_amount_sar: 701
-  std_amount_sar: 245
+  mean_amount_sar: 778
+  std_amount_sar: 224
   prob_income: 0.0
   mean_income: 0.0
   std_income: 0.0
@@ -36,26 +36,26 @@ default:
   std_income_sar: 0.0
   mean_outcome: 500.0
   std_outcome: 100.0
-  mean_outcome_sar: 536
-  std_outcome_sar: 108
-  prob_spend_cash: 0.28152801130780586
+  mean_outcome_sar: 496
+  std_outcome_sar: 125
+  prob_spend_cash: 0.37015427808125856
   n_steps_balance_history: 28
   margin_ratio: 0.1
   mean_phone_change_frequency: 1460
   std_phone_change_frequency: 365
-  mean_phone_change_frequency_sar: 1279
-  std_phone_change_frequency_sar: 274
+  mean_phone_change_frequency_sar: 1298
+  std_phone_change_frequency_sar: 271
   mean_bank_change_frequency: 1460
   std_bank_change_frequency: 365
-  mean_bank_change_frequency_sar: 1384
-  std_bank_change_frequency_sar: 430
-  prob_participate_in_multiple_sars: 0.06983546479723848
+  mean_bank_change_frequency_sar: 1398
+  std_bank_change_frequency_sar: 412
+  prob_participate_in_multiple_sars: 0.0805613317204169
   mean_duration_normal: 20
   std_duration_normal: 10
-  mean_duration_alert: 17.612735070421962
-  std_duration_alert: 12.1068366655949
+  mean_duration_alert: 13.377876685799599
+  std_duration_alert: 13.017392168001912
   burstiness_bias_normal: 0.0
-  burstiness_bias_alert: -1.4856451939663895
+  burstiness_bias_alert: -0.018628156169305576
 optimisation_bounds:
   mean_amount_sar:
   - 600

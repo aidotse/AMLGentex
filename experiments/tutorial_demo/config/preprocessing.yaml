@@ -53,7 +53,7 @@ seed: 42
 # Pattern-based splitting - keeps all nodes from the same SAR pattern together
 # Prevents data leakage where model sees part of a pattern in training
 # and is evaluated on other nodes from the same pattern
-split_by_pattern: true
+split_by_pattern: false
 
 # =============================================================================
 # INDUCTIVE SETTINGS (only used when learning_mode: inductive)
