@@ -79,20 +79,31 @@ cd experiments/my_experiment/config
 
 2. **`preprocessing.yaml`** - Feature engineering settings:
    ```yaml
-   raw_data_file: experiments/my_experiment/temporal/tx_log.parquet
-   preprocessed_data_dir: experiments/my_experiment/preprocessed
-
+   # Feature windows
    num_windows: 4
    window_len: 28
 
-   train_start_step: 0
-   train_end_step: 112
-   val_start_step: 0
-   val_end_step: 112
-   test_start_step: 0
-   test_end_step: 112
+   # Learning mode: transductive or inductive
+   learning_mode: transductive
 
-   include_edges: true
+   # Transductive settings (single time window for all splits)
+   time_start: 0
+   time_end: 112
+   transductive_train_fraction: 0.6
+   transductive_val_fraction: 0.2
+   transductive_test_fraction: 0.2
+   split_by_pattern: true  # Prevents data leakage across SAR patterns
+
+   # Or for inductive mode (different time windows):
+   # learning_mode: inductive
+   # train_start_step: 0
+   # train_end_step: 50
+   # val_start_step: 51
+   # val_end_step: 80
+   # test_start_step: 81
+   # test_end_step: 112
+
+   include_edge_features: false
    ```
 
 3. **`models.yaml`** - Model configurations (copy from `10k_accounts/config/models.yaml`)

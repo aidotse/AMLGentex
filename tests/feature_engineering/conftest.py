@@ -87,33 +87,35 @@ def sample_transactions_df():
 
 @pytest.fixture
 def basic_preprocessor_config():
-    """Create a basic configuration for DataPreprocessor"""
+    """Create a basic configuration for DataPreprocessor (inductive mode)"""
     return {
         'num_windows': 2,
         'window_len': 10,
+        'learning_mode': 'inductive',
         'train_start_step': 1,
         'train_end_step': 15,
         'val_start_step': 16,
         'val_end_step': 22,
         'test_start_step': 23,
         'test_end_step': 30,
-        'include_edges': False
+        'include_edge_features': False
     }
 
 
 @pytest.fixture
 def preprocessor_config_with_edges():
-    """Create a configuration with edge features enabled"""
+    """Create a configuration with edge features enabled (inductive mode)"""
     return {
         'num_windows': 2,
         'window_len': 10,
+        'learning_mode': 'inductive',
         'train_start_step': 1,
         'train_end_step': 15,
         'val_start_step': 16,
         'val_end_step': 22,
         'test_start_step': 23,
         'test_end_step': 30,
-        'include_edges': True
+        'include_edge_features': True
     }
 
 

@@ -20,13 +20,10 @@ def temp_preprocessed_dir_transductive(sample_transactions_df):
         config = {
             'num_windows': 2,
             'window_len': 15,
-            'train_start_step': 1,
-            'train_end_step': 30,
-            'val_start_step': 1,
-            'val_end_step': 30,
-            'test_start_step': 1,
-            'test_end_step': 30,
-            'include_edges': False,
+            'learning_mode': 'transductive',
+            'time_start': 1,
+            'time_end': 30,
+            'include_edge_features': False,
             'seed': 42
         }
 
@@ -62,13 +59,14 @@ def temp_preprocessed_dir_inductive(sample_transactions_df):
         config = {
             'num_windows': 2,
             'window_len': 10,
+            'learning_mode': 'inductive',
             'train_start_step': 1,
             'train_end_step': 10,
             'val_start_step': 11,
             'val_end_step': 20,
             'test_start_step': 21,
             'test_end_step': 30,
-            'include_edges': False,
+            'include_edge_features': False,
             'seed': 42
         }
 

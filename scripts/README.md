@@ -79,7 +79,7 @@ uv run python scripts/preprocess.py --conf_file experiments/10k_accounts/config/
 **Output:**
 - `experiments/<name>/preprocessed/centralized/`
   - `trainset_nodes.parquet`, `valset_nodes.parquet`, `testset_nodes.parquet`
-  - `trainset_edges.parquet`, `valset_edges.parquet`, `testset_edges.parquet` (if `include_edges: true`)
+  - `trainset_edges.parquet`, `valset_edges.parquet`, `testset_edges.parquet` (if `include_edge_features: true`)
 - `experiments/<name>/preprocessed/clients/<bank_id>/`
   - Same structure, but filtered by bank for federated learning
 

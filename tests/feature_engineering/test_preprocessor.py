@@ -28,7 +28,7 @@ class TestDataPreprocessorInit:
         """Test initialization with edge features enabled"""
         preprocessor = DataPreprocessor(preprocessor_config_with_edges)
 
-        assert preprocessor.include_edges is True
+        assert preprocessor.include_edge_features is True
 
 
 @pytest.mark.unit
@@ -136,18 +136,41 @@ class TestCalNodeFeatures:
         numeric_cols = df_nodes.select_dtypes(include=[np.number]).columns
         assert (df_nodes[numeric_cols] >= 0).all().all()
 
+    def test_cal_node_features_are_unique(self, basic_preprocessor_config, sample_transactions_df):
+        """Test that all nodes have unique feature vectors"""
+        preprocessor = DataPreprocessor(basic_preprocessor_config)
+        df_nodes = preprocessor.cal_node_features(
+            sample_transactions_df,
+            start_step=1,
+            end_step=15
+        )
+
+        # Get feature columns (exclude account, bank, is_sar which are identifiers/labels)
+        feature_cols = [col for col in df_nodes.columns
+                       if col not in ['account', 'bank', 'is_sar']]
+
+        # Check that all nodes have unique feature vectors
+        n_nodes = len(df_nodes)
+        n_unique = len(df_nodes[feature_cols].drop_duplicates())
+
+        assert n_unique == n_nodes, (
+            f"Found {n_nodes - n_unique} duplicate feature vectors among {n_nodes} nodes. "
+            "Each node should have unique features based on its transaction history."
+        )
+
     def test_cal_node_features_single_window(self, sample_transactions_df):
         """Test with a single window"""
         config = {
             'num_windows': 1,
             'window_len': 15,
+            'learning_mode': 'inductive',
             'train_start_step': 1,
             'train_end_step': 15,
             'val_start_step': 16,
             'val_end_step': 22,
             'test_start_step': 23,
             'test_end_step': 30,
-            'include_edges': False
+            'include_edge_features': False
         }
         preprocessor = DataPreprocessor(config)
         df_nodes = preprocessor.cal_node_features(
@@ -381,3 +404,40 @@ class TestBankFiltering:
         # Should only include accounts from BANK001
         if len(df_nodes) > 0:
             assert (df_nodes['bank'] == 'BANK001').all()
+
+    def test_bank_filtering_includes_cross_bank_transactions(self, basic_preprocessor_config):
+        """Test that bank filter includes cross-bank transactions in features"""
+        # Create test data with cross-bank transactions
+        df = pd.DataFrame({
+            'step': [1, 1, 1],
+            'nameOrig': [100, 100, 200],
+            'nameDest': [101, 201, 100],  # 100->101 internal, 100->201 outgoing, 200->100 incoming
+            'amount': [1000.0, 2000.0, 3000.0],
+            'bankOrig': ['BANK001', 'BANK001', 'BANK002'],
+            'bankDest': ['BANK001', 'BANK002', 'BANK001'],
+            'daysInBankOrig': [10, 10, 20],
+            'daysInBankDest': [15, 25, 10],
+            'phoneChangesOrig': [0, 0, 1],
+            'phoneChangesDest': [0, 1, 0],
+            'isSAR': [0, 0, 0],
+        })
+
+        # Process with BANK001 filter
+        preprocessor = DataPreprocessor(basic_preprocessor_config)
+        preprocessor.bank = 'BANK001'
+        df_nodes = preprocessor.cal_node_features(df, start_step=1, end_step=15)
+
+        # Account 100 should have:
+        # - sum_out = 1000 + 2000 = 3000 (internal + cross-bank outgoing)
+        # - sum_in = 3000 (cross-bank incoming from BANK002)
+        account_100 = df_nodes[df_nodes['account'] == 100]
+        assert len(account_100) == 1, "Account 100 should exist"
+
+        sum_out_cols = [c for c in account_100.columns if 'sum_out' in c]
+        sum_in_cols = [c for c in account_100.columns if 'sum_in' in c]
+
+        total_out = account_100[sum_out_cols].values.sum()
+        total_in = account_100[sum_in_cols].values.sum()
+
+        assert total_out == 3000.0, f"Expected sum_out=3000 (internal + cross-bank), got {total_out}"
+        assert total_in == 3000.0, f"Expected sum_in=3000 (cross-bank incoming), got {total_in}"

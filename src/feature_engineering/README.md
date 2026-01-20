@@ -53,7 +53,7 @@ train_nodes = datasets['trainset_nodes']
 val_nodes = datasets['valset_nodes']
 test_nodes = datasets['testset_nodes']
 
-# If include_edges=True in config
+# If include_edge_features=True in config
 train_edges = datasets['trainset_edges']  # Optional
 ```
 
@@ -62,47 +62,52 @@ train_edges = datasets['trainset_edges']  # Optional
 Example `preprocessing.yaml`:
 
 ```yaml
-raw_data_file: experiments/10k_accounts/temporal/tx_log.parquet
-preprocessed_data_dir: experiments/10k_accounts/preprocessed
-
 # Time window aggregation
 num_windows: 4        # Number of sliding windows
 window_len: 28        # Days per window
 
-# Dataset splits
-train_start_step: 0
-train_end_step: 112
-val_start_step: 0
-val_end_step: 112
-test_start_step: 0
-test_end_step: 112
+# Learning mode: transductive or inductive
+learning_mode: transductive
+
+# Transductive settings (only used when learning_mode: transductive)
+time_start: 0
+time_end: 112
+transductive_train_fraction: 0.6
+transductive_val_fraction: 0.2
+transductive_test_fraction: 0.2
+split_by_pattern: true  # Keep SAR patterns together to prevent leakage
 
 # Include edge features (for GNN models)
-include_edges: true
+include_edge_features: false
 ```
 
 **Learning Paradigms:**
 
-1. **Transductive Learning**: Time ranges completely overlap, different nodes labeled per split
+1. **Transductive Learning** (`learning_mode: transductive`):
+   - Same graph for all splits, labels split into train/val/test
+   - Single time window specified with `time_start` and `time_end`
+   - Configure label fractions with `transductive_*_fraction`
    ```yaml
-   # Same time period for all splits
-   train_start_step: 0
-   train_end_step: 112
-   val_start_step: 0
-   val_end_step: 112
-   test_start_step: 0
-   test_end_step: 112
+   learning_mode: transductive
+   time_start: 0
+   time_end: 112
+   transductive_train_fraction: 0.6
+   transductive_val_fraction: 0.2
+   transductive_test_fraction: 0.2
+   split_by_pattern: true
    ```
 
-2. **Inductive Learning**: Time ranges partially overlap or don't overlap
+2. **Inductive Learning** (`learning_mode: inductive`):
+   - Different time windows for train/val/test (temporal separation)
+   - Test accounts completely unseen during training
    ```yaml
-   # Different time periods
+   learning_mode: inductive
    train_start_step: 0
-   train_end_step: 84
-   val_start_step: 28
-   val_end_step: 112
-   test_start_step: 84
-   test_end_step: 168
+   train_end_step: 50
+   val_start_step: 51
+   val_end_step: 80
+   test_start_step: 81
+   test_end_step: 112
    ```
 
 ## Node Features
@@ -145,7 +150,7 @@ For each time window, the following features are computed per account:
 
 ## Edge Features
 
-When `include_edges=True`, transaction relationships between accounts are captured:
+When `include_edge_features=True`, transaction relationships between accounts are captured:
 
 For each time window, per (src, dst) pair:
 - `sums_{start}_{end}`: Total transaction amount

@@ -5,44 +5,62 @@ class DataPreprocessor:
     def __init__(self, config, verbose: bool = True):
         self.num_windows = config['num_windows']
         self.window_len = config['window_len']
-        self.train_start_step = config['train_start_step']
-        self.train_end_step = config['train_end_step']
-        self.val_start_step = config['val_start_step']
-        self.val_end_step = config['val_end_step']
-        self.test_start_step = config['test_start_step']
-        self.test_end_step = config['test_end_step']
-        self.include_edges = config['include_edges']
+        self.include_edge_features = config.get('include_edge_features', False)
         self.bank = None
         self.verbose = verbose
 
-        # Detect learning setting from time windows
-        # Transductive: All splits have same time window (complete overlap)
-        # Inductive: Splits have different time windows (temporal separation)
-        self.is_transductive = (
-            self.train_start_step == self.val_start_step == self.test_start_step and
-            self.train_end_step == self.val_end_step == self.test_end_step
-        )
+        # Learning mode: transductive or inductive
+        self.learning_mode = config['learning_mode']
+        self.is_transductive = self.learning_mode == 'transductive'
 
-        # Label splitting configuration for transductive learning
-        self.train_label_fraction = config.get('train_label_fraction', 0.6)
-        self.val_label_fraction = config.get('val_label_fraction', 0.2)
-        self.test_label_fraction = config.get('test_label_fraction', 0.2)
-        self.seed = config.get('seed', 42)
+        if self.is_transductive:
+            # Transductive: single time window for all splits
+            self.time_start = config['time_start']
+            self.time_end = config['time_end']
+            # Use same window for train/val/test
+            self.train_start_step = self.time_start
+            self.train_end_step = self.time_end
+            self.val_start_step = self.time_start
+            self.val_end_step = self.time_end
+            self.test_start_step = self.time_start
+            self.test_end_step = self.time_end
+
+            # Transductive-only settings
+            self.transductive_train_fraction = config.get('transductive_train_fraction', 0.6)
+            self.transductive_val_fraction = config.get('transductive_val_fraction', 0.2)
+            self.transductive_test_fraction = config.get('transductive_test_fraction', 0.2)
+            self.seed = config.get('seed', 42)
+            self.split_by_pattern = config.get('split_by_pattern', False)
+        else:
+            # Inductive: separate time windows for each split
+            self.train_start_step = config['train_start_step']
+            self.train_end_step = config['train_end_step']
+            self.val_start_step = config['val_start_step']
+            self.val_end_step = config['val_end_step']
+            self.test_start_step = config['test_start_step']
+            self.test_end_step = config['test_end_step']
+            # These are not used in inductive mode
+            self.transductive_train_fraction = None
+            self.transductive_val_fraction = None
+            self.transductive_test_fraction = None
+            self.seed = config.get('seed', 42)
+            self.split_by_pattern = False
     
     
     def load_data(self, path:str) -> pd.DataFrame:
         df = pd.read_parquet(path)
         df = df[df['bankOrig'] != 'source'] # TODO: create features based on source transactions
         # Drop columns not needed for feature engineering
-        # Note: patternID and modelType are dropped to avoid direct pattern leakage
-        df.drop(columns=['type', 'oldbalanceOrig', 'oldbalanceDest', 'newbalanceOrig', 'newbalanceDest', 'patternID', 'modelType'], inplace=True)
+        # Note: patternID is kept if split_by_pattern is enabled (for splitting, not as a feature)
+        # modelType is always dropped to avoid direct pattern leakage
+        cols_to_drop = ['type', 'oldbalanceOrig', 'oldbalanceDest', 'newbalanceOrig', 'newbalanceDest', 'modelType']
+        if not self.split_by_pattern:
+            cols_to_drop.append('patternID')
+        df.drop(columns=cols_to_drop, inplace=True)
         return df
 
     
     def cal_node_features(self, df:pd.DataFrame, start_step, end_step) -> pd.DataFrame:
-        df_bank = df[(df['bankOrig'] == self.bank) & (df['bankDest'] == self.bank)] if self.bank is not None else df
-        accounts = pd.unique(df_bank[['nameOrig', 'nameDest']].values.ravel('K'))
-
         # Validate window coverage
         total_span = end_step - start_step + 1
         if self.num_windows == 1 and self.window_len < total_span:
@@ -71,12 +89,49 @@ class DataPreprocessor:
                           for i in range(self.num_windows)]
         else:
             windows = [(start_step, end_step)]
-        # filter out transactions to the sink
-        df_spending = df[df['bankDest'] == 'sink'].rename(columns={'nameOrig': 'account'})
-        # filter out and reform transactions within the network 
-        df_network = df[df['bankDest'] != 'sink']
-        df_in = df_network[['step', 'nameDest', 'bankDest', 'amount', 'nameOrig', 'daysInBankDest', 'phoneChangesDest', 'isSAR']].rename(columns={'nameDest': 'account', 'bankDest': 'bank', 'nameOrig': 'counterpart', 'daysInBankDest': 'days_in_bank', 'phoneChangesDest': 'n_phone_changes', 'isSAR': 'is_sar'})
-        df_out = df_network[['step', 'nameOrig', 'bankOrig', 'amount', 'nameDest', 'daysInBankOrig', 'phoneChangesOrig', 'isSAR']].rename(columns={'nameOrig': 'account', 'bankOrig': 'bank', 'nameDest': 'counterpart', 'daysInBankOrig': 'days_in_bank', 'phoneChangesOrig': 'n_phone_changes', 'isSAR': 'is_sar'})
+
+        # Filter transactions based on bank setting
+        # When self.bank is set, bank sees ALL transactions involving its accounts
+        # (incoming from any bank, outgoing to any bank, spending to sink)
+        # Define column mappings for incoming and outgoing transactions
+        in_cols = ['step', 'nameDest', 'bankDest', 'amount', 'nameOrig', 'daysInBankDest', 'phoneChangesDest', 'isSAR']
+        in_rename = {'nameDest': 'account', 'bankDest': 'bank', 'nameOrig': 'counterpart',
+                     'daysInBankDest': 'days_in_bank', 'phoneChangesDest': 'n_phone_changes', 'isSAR': 'is_sar'}
+        out_cols = ['step', 'nameOrig', 'bankOrig', 'amount', 'nameDest', 'daysInBankOrig', 'phoneChangesOrig', 'isSAR']
+        out_rename = {'nameOrig': 'account', 'bankOrig': 'bank', 'nameDest': 'counterpart',
+                      'daysInBankOrig': 'days_in_bank', 'phoneChangesOrig': 'n_phone_changes', 'isSAR': 'is_sar'}
+
+        # Include patternID if split_by_pattern is enabled
+        if self.split_by_pattern and 'patternID' in df.columns:
+            in_cols.append('patternID')
+            in_rename['patternID'] = 'pattern_id'
+            out_cols.append('patternID')
+            out_rename['patternID'] = 'pattern_id'
+
+        if self.bank is not None:
+            # Accounts belonging to this bank
+            accounts_orig = df[df['bankOrig'] == self.bank]['nameOrig'].unique()
+            accounts_dest = df[df['bankDest'] == self.bank]['nameDest'].unique()
+            accounts = pd.unique(np.concatenate([accounts_orig, accounts_dest]))
+
+            # Spending: transactions from this bank's accounts to sink
+            df_spending = df[(df['bankOrig'] == self.bank) & (df['bankDest'] == 'sink')].rename(columns={'nameOrig': 'account'})
+
+            # Incoming: transactions TO this bank's accounts (from any bank)
+            df_network_in = df[(df['bankDest'] == self.bank) & (df['bankDest'] != 'sink')]
+            # Outgoing: transactions FROM this bank's accounts (to any bank, excluding sink)
+            df_network_out = df[(df['bankOrig'] == self.bank) & (df['bankDest'] != 'sink')]
+
+            df_in = df_network_in[in_cols].rename(columns=in_rename)
+            df_out = df_network_out[out_cols].rename(columns=out_rename)
+        else:
+            # No bank filter: use all transactions
+            accounts = pd.unique(df[['nameOrig', 'nameDest']].values.ravel('K'))
+            df_spending = df[df['bankDest'] == 'sink'].rename(columns={'nameOrig': 'account'})
+            df_network = df[df['bankDest'] != 'sink']
+
+            df_in = df_network[in_cols].rename(columns=in_rename)
+            df_out = df_network[out_cols].rename(columns=out_rename)
 
         df_nodes = pd.DataFrame()
         df_nodes = pd.concat([df_out[['account', 'bank']], df_in[['account', 'bank']]]).drop_duplicates().set_index('account')
@@ -111,12 +166,18 @@ class DataPreprocessor:
             node_features[f'count_out_{window[0]}_{window[1]}'] = gb_out['amount'].count()
             node_features[f'count_unique_out_{window[0]}_{window[1]}'] = gb_out['counterpart'].nunique()
         # calculate non window related features
-        df_combined = pd.concat([df_in[['account', 'days_in_bank', 'n_phone_changes', 'is_sar']], df_out[['account', 'days_in_bank', 'n_phone_changes', 'is_sar']]])
+        combine_cols = ['account', 'days_in_bank', 'n_phone_changes', 'is_sar']
+        if self.split_by_pattern and 'pattern_id' in df_in.columns:
+            combine_cols.append('pattern_id')
+        df_combined = pd.concat([df_in[combine_cols], df_out[combine_cols]])
         gb = df_combined.groupby('account')
         node_features['counts_days_in_bank'] = gb['days_in_bank'].max()
         node_features['counts_phone_changes'] = gb['n_phone_changes'].max()
         # find label
         node_features['is_sar'] = gb['is_sar'].max()
+        # track pattern ID for pattern-based splitting (use max to get the SAR pattern if any)
+        if self.split_by_pattern and 'pattern_id' in df_in.columns:
+            node_features['pattern_id'] = gb['pattern_id'].max()
         # concat features
         node_features_df = pd.concat(node_features, axis=1)
         # merge with nodes
@@ -125,13 +186,22 @@ class DataPreprocessor:
         
         df_nodes = df_nodes.reset_index()
         df_nodes = df_nodes[df_nodes['account'].isin(accounts)]
-        df_nodes = df_nodes[df_nodes['bank'] == self.bank] if self.bank is not None else df_nodes
+        if self.bank is not None:
+            df_nodes = df_nodes[df_nodes['bank'] == self.bank]
+        else:
+            # When processing all banks, deduplicate by account to avoid duplicate nodes
+            # (features are computed per-account, not per-account-bank pair)
+            df_nodes = df_nodes.drop_duplicates(subset='account', keep='first')
         # if any value is nan, there was no transaction in the window for that account and hence the feature should be 0
         df_nodes = df_nodes.fillna(0.0).infer_objects(copy=False)
         # check if there is any missing values
         assert df_nodes.isnull().sum().sum() == 0, 'There are missing values in the node features'
-        # check if there are any negative values in all comuns except the bank column
-        assert (df_nodes.drop(columns='bank') < 0).sum().sum() == 0, 'There are negative values in the node features'
+        # check if there are any negative values in feature columns
+        # (exclude bank and pattern_id which can have non-feature values)
+        exclude_cols = ['bank']
+        if 'pattern_id' in df_nodes.columns:
+            exclude_cols.append('pattern_id')
+        assert (df_nodes.drop(columns=exclude_cols) < 0).sum().sum() == 0, 'There are negative values in the node features'
         return df_nodes
     
     
@@ -145,9 +215,9 @@ class DataPreprocessor:
         # Filter network transactions only (exclude source/sink)
         df_network = df[(df['bankOrig'] != 'source') & (df['bankDest'] != 'sink')]
 
-        # Filter by bank if specified
+        # Filter by bank if specified - include edges where at least one endpoint belongs to this bank
         if self.bank is not None:
-            df_network = df_network[(df_network['bankOrig'] == self.bank) & (df_network['bankDest'] == self.bank)]
+            df_network = df_network[(df_network['bankOrig'] == self.bank) | (df_network['bankDest'] == self.bank)]
 
         # Extract unique edges (pure graph structure)
         edges = df_network[['nameOrig', 'nameDest']].drop_duplicates()
@@ -187,6 +257,10 @@ class DataPreprocessor:
                           for i in range(self.num_windows)]
         else:
             windows = [(start_step, end_step)]
+
+        # Filter by bank if set - include edges where at least one endpoint belongs to this bank
+        if self.bank is not None:
+            df = df[(df['bankOrig'] == self.bank) | (df['bankDest'] == self.bank)]
 
         # Rename columns
         df = df[['step', 'nameOrig', 'nameDest', 'amount', 'isSAR']].rename(columns={'nameOrig': 'src', 'nameDest': 'dst', 'isSAR': 'is_sar'})
@@ -237,8 +311,18 @@ class DataPreprocessor:
     def create_transductive_masks(self, df_nodes: pd.DataFrame):
         """
         Create train/val/test masks for transductive learning.
-        Randomly splits SAR and normal nodes into non-overlapping sets.
+
+        If split_by_pattern is enabled, splits by pattern ID to ensure no pattern
+        appears in multiple splits (prevents data leakage). Otherwise, randomly
+        splits SAR and normal nodes.
         """
+        if self.split_by_pattern and 'pattern_id' in df_nodes.columns:
+            return self._create_masks_by_pattern(df_nodes)
+        else:
+            return self._create_masks_random(df_nodes)
+
+    def _create_masks_random(self, df_nodes: pd.DataFrame):
+        """Random split of SAR and normal nodes into non-overlapping sets."""
         n_nodes = len(df_nodes)
         train_mask = np.zeros(n_nodes, dtype=bool)
         val_mask = np.zeros(n_nodes, dtype=bool)
@@ -250,8 +334,8 @@ class DataPreprocessor:
         sar_indices = np.random.permutation(sar_indices)
 
         n_sar = len(sar_indices)
-        n_sar_train = int(self.train_label_fraction * n_sar)
-        n_sar_val = int(self.val_label_fraction * n_sar)
+        n_sar_train = int(self.transductive_train_fraction * n_sar)
+        n_sar_val = int(self.transductive_val_fraction * n_sar)
 
         sar_train = sar_indices[:n_sar_train]
         sar_val = sar_indices[n_sar_train:n_sar_train + n_sar_val]
@@ -262,8 +346,8 @@ class DataPreprocessor:
         normal_indices = np.random.permutation(normal_indices)
 
         n_normal = len(normal_indices)
-        n_normal_train = int(self.train_label_fraction * n_normal)
-        n_normal_val = int(self.val_label_fraction * n_normal)
+        n_normal_train = int(self.transductive_train_fraction * n_normal)
+        n_normal_val = int(self.transductive_val_fraction * n_normal)
 
         normal_train = normal_indices[:n_normal_train]
         normal_val = normal_indices[n_normal_train:n_normal_train + n_normal_val]
@@ -282,7 +366,7 @@ class DataPreprocessor:
         df_nodes['test_mask'] = test_mask
 
         if self.verbose:
-            print(f"\nTransductive label splitting:")
+            print(f"\nTransductive label splitting (random):")
             print(f"  Total nodes: {n_nodes}, SAR nodes: {n_sar}, Normal nodes: {n_normal}")
             print(f"  Train: {len(sar_train)} SAR + {len(normal_train)} normal = {train_mask.sum()}")
             print(f"  Val:   {len(sar_val)} SAR + {len(normal_val)} normal = {val_mask.sum()}")
@@ -290,9 +374,91 @@ class DataPreprocessor:
 
         return df_nodes
 
+    def _create_masks_by_pattern(self, df_nodes: pd.DataFrame):
+        """
+        Split by pattern ID to ensure no pattern appears in multiple splits.
+
+        SAR patterns (pattern_id >= 0) are split by pattern, keeping all nodes
+        of a pattern together. Normal nodes (pattern_id < 0) are split randomly.
+        """
+        n_nodes = len(df_nodes)
+        train_mask = np.zeros(n_nodes, dtype=bool)
+        val_mask = np.zeros(n_nodes, dtype=bool)
+        test_mask = np.zeros(n_nodes, dtype=bool)
+
+        np.random.seed(self.seed)
+
+        # Get unique SAR patterns (pattern_id >= 0)
+        sar_mask = df_nodes['pattern_id'] >= 0
+        sar_patterns = df_nodes.loc[sar_mask, 'pattern_id'].unique()
+        sar_patterns = np.random.permutation(sar_patterns)
+
+        n_patterns = len(sar_patterns)
+        n_patterns_train = int(self.transductive_train_fraction * n_patterns)
+        n_patterns_val = int(self.transductive_val_fraction * n_patterns)
+
+        train_patterns = set(sar_patterns[:n_patterns_train])
+        val_patterns = set(sar_patterns[n_patterns_train:n_patterns_train + n_patterns_val])
+        test_patterns = set(sar_patterns[n_patterns_train + n_patterns_val:])
+
+        # Assign SAR nodes based on their pattern
+        for idx, row in df_nodes.iterrows():
+            node_idx = df_nodes.index.get_loc(idx)
+            pattern = row['pattern_id']
+            if pattern >= 0:  # SAR node
+                if pattern in train_patterns:
+                    train_mask[node_idx] = True
+                elif pattern in val_patterns:
+                    val_mask[node_idx] = True
+                elif pattern in test_patterns:
+                    test_mask[node_idx] = True
+
+        # Split normal nodes (pattern_id < 0) randomly
+        normal_indices = np.where(df_nodes['pattern_id'] < 0)[0]
+        normal_indices = np.random.permutation(normal_indices)
+
+        n_normal = len(normal_indices)
+        n_normal_train = int(self.transductive_train_fraction * n_normal)
+        n_normal_val = int(self.transductive_val_fraction * n_normal)
+
+        normal_train = normal_indices[:n_normal_train]
+        normal_val = normal_indices[n_normal_train:n_normal_train + n_normal_val]
+        normal_test = normal_indices[n_normal_train + n_normal_val:]
+
+        train_mask[normal_train] = True
+        val_mask[normal_val] = True
+        test_mask[normal_test] = True
+
+        df_nodes['train_mask'] = train_mask
+        df_nodes['val_mask'] = val_mask
+        df_nodes['test_mask'] = test_mask
+
+        # Remove pattern_id from output (it was only needed for splitting)
+        df_nodes = df_nodes.drop(columns=['pattern_id'])
+
+        if self.verbose:
+            n_sar_train = train_mask.sum() - len(normal_train)
+            n_sar_val = val_mask.sum() - len(normal_val)
+            n_sar_test = test_mask.sum() - len(normal_test)
+            print(f"\nTransductive label splitting (by pattern):")
+            print(f"  Total nodes: {n_nodes}, SAR patterns: {n_patterns}, Normal nodes: {n_normal}")
+            print(f"  Train: {len(train_patterns)} patterns ({n_sar_train} SAR nodes) + {len(normal_train)} normal = {train_mask.sum()}")
+            print(f"  Val:   {len(val_patterns)} patterns ({n_sar_val} SAR nodes) + {len(normal_val)} normal = {val_mask.sum()}")
+            print(f"  Test:  {len(test_patterns)} patterns ({n_sar_test} SAR nodes) + {len(normal_test)} normal = {test_mask.sum()}")
+
+        return df_nodes
+
 
     def preprocess_transductive(self, df: pd.DataFrame):
-        """Preprocess for transductive learning (same time window, split labels)."""
+        """
+        Preprocess for transductive learning (same time window, split labels).
+
+        In transductive learning, all splits share the same graph structure and features.
+        The train/val/test distinction is made via boolean mask columns (train_mask,
+        val_mask, test_mask) on the nodes. The returned dict contains three keys for
+        API consistency with inductive preprocessing, but they reference the same
+        DataFrame objects.
+        """
         df_window = df[(df['step'] >= self.train_start_step) & (df['step'] <= self.train_end_step)]
 
         # Compute features once (same graph for all splits)
@@ -302,23 +468,24 @@ class DataPreprocessor:
         df_edges = self.extract_edge_list(df_window, self.train_start_step, self.train_end_step)
 
         # Optionally compute edge features
-        if self.include_edges:
+        if self.include_edge_features:
             df_network = df_window[(df_window['bankOrig'] != 'source') & (df_window['bankDest'] != 'sink')]
             if self.bank is not None:
-                df_network = df_network[(df_network['bankOrig'] == self.bank) & (df_network['bankDest'] == self.bank)]
+                df_network = df_network[(df_network['bankOrig'] == self.bank) | (df_network['bankDest'] == self.bank)]
 
             df_edge_features = self.cal_edge_features(df=df_network, start_step=self.train_start_step,
                                                      end_step=self.train_end_step, directional=True)
             df_edges = df_edges.merge(df_edge_features, on=['src', 'dst'], how='left')
 
-        # Return same graph for all splits
+        # Return same graph for all splits (same object references for API consistency)
+        # Note: If saving to disk, only one copy needs to be written
         return {
             'trainset_nodes': df_nodes,
             'trainset_edges': df_edges,
-            'valset_nodes': df_nodes,
-            'valset_edges': df_edges,
-            'testset_nodes': df_nodes,
-            'testset_edges': df_edges
+            'valset_nodes': df_nodes,   # same as trainset_nodes
+            'valset_edges': df_edges,   # same as trainset_edges
+            'testset_nodes': df_nodes,  # same as trainset_nodes
+            'testset_edges': df_edges   # same as trainset_edges
         }
 
 
@@ -345,15 +512,15 @@ class DataPreprocessor:
         df_edges_test = self.extract_edge_list(df_test, self.test_start_step, self.test_end_step)
 
         # Optionally compute edge features
-        if self.include_edges:
+        if self.include_edge_features:
             df_train_network = df_train[(df_train['bankOrig'] != 'source') & (df_train['bankDest'] != 'sink')]
             df_val_network = df_val[(df_val['bankOrig'] != 'source') & (df_val['bankDest'] != 'sink')]
             df_test_network = df_test[(df_test['bankOrig'] != 'source') & (df_test['bankDest'] != 'sink')]
 
             if self.bank is not None:
-                df_train_network = df_train_network[(df_train_network['bankOrig'] == self.bank) & (df_train_network['bankDest'] == self.bank)]
-                df_val_network = df_val_network[(df_val_network['bankOrig'] == self.bank) & (df_val_network['bankDest'] == self.bank)]
-                df_test_network = df_test_network[(df_test_network['bankOrig'] == self.bank) & (df_test_network['bankDest'] == self.bank)]
+                df_train_network = df_train_network[(df_train_network['bankOrig'] == self.bank) | (df_train_network['bankDest'] == self.bank)]
+                df_val_network = df_val_network[(df_val_network['bankOrig'] == self.bank) | (df_val_network['bankDest'] == self.bank)]
+                df_test_network = df_test_network[(df_test_network['bankOrig'] == self.bank) | (df_test_network['bankDest'] == self.bank)]
 
             df_edge_features_train = self.cal_edge_features(df=df_train_network, start_step=self.train_start_step,
                                                            end_step=self.train_end_step, directional=True)

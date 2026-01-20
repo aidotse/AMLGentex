@@ -370,11 +370,41 @@ The framework models multiple sources of noise and complexity that affect real A
    - Phone/bank change frequency
    - Cash usage indicators
 
-3. **Train/Val/Test Splits:** Supports both **transductive** and **inductive** learning
-   - **Transductive**: All accounts seen during training (full graph visible, but test labels hidden)
-   - **Inductive**: Test accounts completely unseen during training (realistic for new accounts)
-   - Time windows can overlap (accounts can appear in multiple splits)
-   - Separate files per bank for federated learning
+3. **Learning Mode:** Explicit flag for **transductive** vs **inductive** learning
+
+   **Transductive** (`learning_mode: transductive`):
+   - Same graph for all splits, labels split into train/val/test
+   - Single time window: `time_start` and `time_end`
+   - Configure label fractions: `transductive_train_fraction`, etc.
+   ```yaml
+   learning_mode: transductive
+   time_start: 0
+   time_end: 100
+   transductive_train_fraction: 0.6
+   transductive_val_fraction: 0.2
+   transductive_test_fraction: 0.2
+   ```
+
+   **Inductive** (`learning_mode: inductive`):
+   - Different time windows for train/val/test (temporal separation)
+   - Test accounts completely unseen during training
+   ```yaml
+   learning_mode: inductive
+   train_start_step: 0
+   train_end_step: 50
+   val_start_step: 51
+   val_end_step: 75
+   test_start_step: 76
+   test_end_step: 100
+   ```
+
+4. **Split Strategies** (transductive only):
+   - **Random split** (default): Randomly assigns nodes to train/val/test
+   - **Pattern-based split**: Splits by pattern ID to prevent data leakage
+     - All nodes of a SAR pattern stay together in the same split
+     - Ensures model generalizes to unseen patterns, not just unseen nodes
+     - Normal nodes (no pattern) are still split randomly
+     - Enable with `split_by_pattern: true` in config
 
 **Configuration:** `experiments/<name>/config/preprocessing.yaml`
 
