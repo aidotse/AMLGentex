@@ -84,9 +84,12 @@ optimisation_bounds:
       age: [0.0, 0.1]
     participation_decay: [0.1, 0.3]
 scale-free:
-  gamma: 2.0
-  loc: 1.0
-  average_degree: 2.0
+  # Truncated discrete power law parameters: P(K=k) ∝ k^(-gamma), k ∈ {kmin, ..., kmax}
+  # Either provide gamma directly, or provide average_degree to solve for gamma automatically
+  kmin: 1              # Minimum degree (replaces legacy 'loc' parameter)
+  # kmax: null         # Maximum degree (defaults to n-1 if not specified)
+  # gamma: 2.0         # Power law exponent (if not provided, solved from average_degree)
+  average_degree: 2.0  # Target mean degree (used to solve for gamma if gamma not provided)
 ml_selector:
   # Money Laundering Account Selector Configuration
   # Controls biased selection of accounts for AML typology injection
