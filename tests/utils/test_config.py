@@ -134,3 +134,298 @@ class TestBuildDataPaths:
         )
 
         assert "discovered_bank" in paths["clients"]
+
+
+@pytest.mark.unit
+class TestLoadTrainingConfig:
+    """Tests for load_training_config function"""
+
+    def test_loads_yaml_config(self, tmp_path):
+        """Test that YAML config is loaded"""
+        from src.utils.config import load_training_config
+
+        # Create experiment structure
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+        preprocessed_dir = tmp_path / "preprocessed" / "centralized"
+        preprocessed_dir.mkdir(parents=True)
+
+        config = {
+            'TestModel': {
+                'default': {'lr': 0.01, 'hidden_dim': 32},
+                'centralized': {'batch_size': 64}
+            }
+        }
+        config_path = config_dir / "models.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_training_config(
+            str(config_path),
+            model_type="TestModel",
+            setting="centralized",
+            client_type="TorchClient"
+        )
+
+        assert result['lr'] == 0.01
+        assert result['hidden_dim'] == 32
+        assert result['batch_size'] == 64
+
+    def test_raises_error_for_unknown_model(self, tmp_path):
+        """Test that unknown model type raises ValueError"""
+        from src.utils.config import load_training_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {'KnownModel': {'default': {}}}
+        config_path = config_dir / "models.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        with pytest.raises(ValueError, match="Model 'UnknownModel' not found"):
+            load_training_config(
+                str(config_path),
+                model_type="UnknownModel",
+                setting="centralized",
+                client_type="TorchClient"
+            )
+
+    def test_merges_default_and_setting_config(self, tmp_path):
+        """Test that default config is merged with setting-specific config"""
+        from src.utils.config import load_training_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {
+            'TestModel': {
+                'default': {'lr': 0.01, 'hidden_dim': 32, 'dropout': 0.1},
+                'centralized': {'hidden_dim': 64}  # Override hidden_dim
+            }
+        }
+        config_path = config_dir / "models.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_training_config(
+            str(config_path),
+            model_type="TestModel",
+            setting="centralized",
+            client_type="TorchClient"
+        )
+
+        assert result['lr'] == 0.01  # From default
+        assert result['hidden_dim'] == 64  # Overridden
+        assert result['dropout'] == 0.1  # From default
+
+    def test_handles_isolated_client_overrides(self, tmp_path):
+        """Test that isolated setting handles per-client overrides"""
+        from src.utils.config import load_training_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+        clients_dir = tmp_path / "preprocessed" / "clients" / "bank_A"
+        clients_dir.mkdir(parents=True)
+
+        config = {
+            'TestModel': {
+                'default': {'lr': 0.01},
+                'isolated': {
+                    'epochs': 100,
+                    'clients': {
+                        'bank_A': {'lr': 0.001}
+                    }
+                }
+            }
+        }
+        config_path = config_dir / "models.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_training_config(
+            str(config_path),
+            model_type="TestModel",
+            setting="isolated",
+            client_type="TorchClient"
+        )
+
+        assert '_client_overrides' in result
+        assert 'bank_A' in result['_client_overrides']
+
+    def test_uses_experiment_root_override(self, tmp_path):
+        """Test that experiment root can be overridden in config"""
+        from src.utils.config import load_training_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+        custom_root = tmp_path / "custom_root"
+        preprocessed_dir = custom_root / "preprocessed" / "centralized"
+        preprocessed_dir.mkdir(parents=True)
+
+        config = {
+            'experiment': {'root': str(custom_root)},
+            'TestModel': {'default': {}}
+        }
+        config_path = config_dir / "models.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_training_config(
+            str(config_path),
+            model_type="TestModel",
+            setting="centralized",
+            client_type="TorchClient"
+        )
+
+        # Data paths should be based on custom root
+        assert str(custom_root) in result['trainset_nodes']
+
+
+@pytest.mark.unit
+class TestGetClientConfig:
+    """Tests for get_client_config function"""
+
+    def test_returns_base_config_without_overrides(self):
+        """Test returns base config when no overrides present"""
+        from src.utils.config import get_client_config
+
+        base_config = {'lr': 0.01, 'epochs': 100}
+        result = get_client_config(base_config, 'bank_A')
+
+        assert result == {'lr': 0.01, 'epochs': 100}
+
+    def test_applies_client_specific_overrides(self):
+        """Test applies client-specific overrides"""
+        from src.utils.config import get_client_config
+
+        base_config = {
+            'lr': 0.01,
+            'epochs': 100,
+            '_client_overrides': {
+                'bank_A': {'lr': 0.001, 'batch_size': 32}
+            }
+        }
+        result = get_client_config(base_config, 'bank_A')
+
+        assert result['lr'] == 0.001  # Overridden
+        assert result['epochs'] == 100  # From base
+        assert result['batch_size'] == 32  # Added from override
+        assert '_client_overrides' not in result
+
+    def test_ignores_other_client_overrides(self):
+        """Test ignores overrides for other clients"""
+        from src.utils.config import get_client_config
+
+        base_config = {
+            'lr': 0.01,
+            '_client_overrides': {
+                'bank_A': {'lr': 0.001},
+                'bank_B': {'lr': 0.0001}
+            }
+        }
+        result = get_client_config(base_config, 'bank_A')
+
+        assert result['lr'] == 0.001
+        assert 'bank_B' not in str(result)
+
+
+@pytest.mark.unit
+class TestLoadDataConfig:
+    """Tests for load_data_config function"""
+
+    def test_loads_yaml_config(self, tmp_path):
+        """Test that YAML config is loaded"""
+        from src.utils.config import load_data_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {
+            'general': {'simulation_name': 'test'},
+            'input': {'degree': 'degree.csv'},
+            'spatial': {},
+            'output': {'transaction_log': 'tx_log.parquet'}
+        }
+        config_path = config_dir / "data.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_data_config(str(config_path))
+
+        assert result['general']['simulation_name'] == 'test'
+
+    def test_auto_constructs_paths(self, tmp_path):
+        """Test that paths are auto-constructed based on experiment root"""
+        from src.utils.config import load_data_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {
+            'input': {},
+            'spatial': {},
+            'output': {}
+        }
+        config_path = config_dir / "data.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_data_config(str(config_path))
+
+        # Paths should be constructed relative to experiment root (tmp_path)
+        assert result['input']['directory'] == str(tmp_path / 'config')
+        assert result['spatial']['directory'] == str(tmp_path / 'spatial')
+        assert result['output']['directory'] == str(tmp_path / 'temporal')
+
+
+@pytest.mark.unit
+class TestLoadPreprocessingConfig:
+    """Tests for load_preprocessing_config function"""
+
+    def test_loads_yaml_config(self, tmp_path):
+        """Test that YAML config is loaded"""
+        from src.utils.config import load_preprocessing_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {
+            'window_size': 7,
+            'features': ['amount_sum', 'count']
+        }
+        config_path = config_dir / "preprocessing.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_preprocessing_config(str(config_path))
+
+        assert result['window_size'] == 7
+        assert result['features'] == ['amount_sum', 'count']
+
+    def test_auto_constructs_paths(self, tmp_path):
+        """Test that paths are auto-constructed based on experiment root"""
+        from src.utils.config import load_preprocessing_config
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True)
+
+        config = {}
+        config_path = config_dir / "preprocessing.yaml"
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+
+        result = load_preprocessing_config(str(config_path))
+
+        # Paths should be constructed relative to experiment root (tmp_path)
+        assert result['raw_data_file'] == str(tmp_path / 'temporal' / 'tx_log.parquet')
+        assert result['preprocessed_data_dir'] == str(tmp_path / 'preprocessed')
