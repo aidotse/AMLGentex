@@ -73,10 +73,7 @@ class DataGenerator:
         """
         import spatial_simulation.generate_scalefree as generate_scalefree
         import spatial_simulation.transaction_graph_generator as txgraph
-        from spatial_simulation.insert_patterns import main as insert_patterns
 
-        sim_name = self.config['general']['simulation_name']
-        input_dir = self.config['input']['directory']
         degree_file = self.config['input']['degree']
 
         # Get spatial output directory from config (already absolute)
@@ -104,33 +101,20 @@ class DataGenerator:
             # Step 1: Generate degree distribution if needed (goes to spatial output)
             degree_path = spatial_output / degree_file
             if not degree_path.exists():
-                logger.info(f"  [1/3] Generating degree distribution...")
+                logger.info(f"  [1/2] Generating degree distribution...")
                 start = time.time()
                 # Call directly with config dict (has absolute paths)
                 generate_scalefree.generate_degree_file_from_config(self.config)
                 logger.info(f"        Complete ({time.time() - start:.2f}s)")
             else:
-                logger.info(f"  [1/3] Degree distribution found: {degree_path}")
+                logger.info(f"  [1/2] Degree distribution found: {degree_path}")
 
             # Step 2: Generate transaction graph
-            logger.info(f"  [2/3] Generating transaction graph...")
+            logger.info(f"  [2/2] Generating transaction graph...")
             start = time.time()
             # Call directly with config dict (has absolute paths)
             txgraph.generate_transaction_graph_from_config(self.config)
             logger.info(f"        Complete ({time.time() - start:.2f}s)")
-
-            # Step 3: Insert patterns if specified
-            insert_patterns_file = self.config['input'].get('insert_patterns')
-            if insert_patterns_file:
-                patterns_path = Path(input_dir) / insert_patterns_file
-                if patterns_path.exists():
-                    logger.info(f"  [3/3] Inserting patterns from {insert_patterns_file}...")
-                    start = time.time()
-                    sys.argv = ['insert_patterns.py', self.conf_file]
-                    insert_patterns()
-                    logger.info(f"        Complete ({time.time() - start:.2f}s)")
-            else:
-                logger.info(f"  [3/3] No patterns to insert")
 
         finally:
             # Restore original state

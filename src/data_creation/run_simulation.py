@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from spatial_simulation.generate_scalefree import main as generate_scalefree
 from spatial_simulation.transaction_graph_generator import main as generate_graph
-from spatial_simulation.insert_patterns import main as insert_patterns
 from temporal_simulation.simulator import AMLSimulator
 
 
@@ -41,7 +40,6 @@ def run_pipeline(config_path):
         config = json.load(f)
 
     sim_name = config['general']['simulation_name']
-    input_dir = config['input']['directory']
     degree_file = config['input']['degree']
 
     print(f"\nSimulation: {sim_name}")
@@ -56,33 +54,20 @@ def run_pipeline(config_path):
     spatial_dir = config['spatial']['directory']
     degree_path = Path(spatial_dir) / degree_file
     if not degree_path.exists():
-        print(f"\n[1/3] Generating degree distribution...")
+        print(f"\n[1/2] Generating degree distribution...")
         start = time.time()
         sys.argv = ['generate_scalefree.py', config_path]
         generate_scalefree()
         print(f"      ✓ Complete ({time.time() - start:.2f}s)")
     else:
-        print(f"\n[1/3] Degree distribution found: {degree_path}")
+        print(f"\n[1/2] Degree distribution found: {degree_path}")
 
     # Step 1.2: Generate transaction graph
-    print(f"\n[2/3] Generating transaction graph...")
+    print(f"\n[2/2] Generating transaction graph...")
     start = time.time()
     sys.argv = ['transaction_graph_generator.py', config_path]
     generate_graph()
     print(f"      ✓ Complete ({time.time() - start:.2f}s)")
-
-    # Step 1.3: Insert patterns if specified
-    insert_patterns_file = config['input'].get('insert_patterns')
-    if insert_patterns_file:
-        patterns_path = Path(input_dir) / insert_patterns_file
-        if patterns_path.exists():
-            print(f"\n[3/3] Inserting patterns from {insert_patterns_file}...")
-            start = time.time()
-            sys.argv = ['insert_patterns.py', config_path]
-            insert_patterns()
-            print(f"      ✓ Complete ({time.time() - start:.2f}s)")
-    else:
-        print(f"\n[3/3] No patterns to insert")
 
     # Phase 2: Temporal Simulation (Time-Step Execution)
     print("\n" + "=" * 60)
