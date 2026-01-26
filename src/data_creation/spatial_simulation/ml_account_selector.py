@@ -419,7 +419,7 @@ class MoneyLaunderingAccountSelector:
         # Note: age uses no log (not heavy-tailed), salary/balance use log
         z_kyc = {}
         for kyc_feature, weight in self.kyc_weights.items():
-            if weight > 0:
+            if weight != 0:
                 kyc_dict = {}
                 for node in nodes:
                     kyc_value = self.g.nodes[node].get(kyc_feature, 0.0)
@@ -437,7 +437,7 @@ class MoneyLaunderingAccountSelector:
 
             # Add structural component (z-scored)
             for feature, weight in self.structure_weights.items():
-                if weight > 0 and feature in z_structural.get(node, {}):
+                if weight != 0 and feature in z_structural.get(node, {}):
                     score += weight * z_structural[node][feature]
 
             # Add propagation component (z-scored global locality fields)
@@ -445,12 +445,12 @@ class MoneyLaunderingAccountSelector:
                 global_key = f"{label_type}_global"
                 prop_weight = self.propagation_weights.get(label_type, 0.0)
 
-                if prop_weight > 0 and global_key in z_propagation:
+                if prop_weight != 0 and global_key in z_propagation:
                     score += prop_weight * z_propagation[global_key].get(node, 0.0)
 
             # Add direct KYC component (z-scored)
             for kyc_feature, weight in self.kyc_weights.items():
-                if weight > 0 and kyc_feature in z_kyc:
+                if weight != 0 and kyc_feature in z_kyc:
                     score += weight * z_kyc[kyc_feature].get(node, 0.0)
 
             scores[node] = score

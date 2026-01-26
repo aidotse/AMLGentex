@@ -1,17 +1,27 @@
 import random
+from collections import defaultdict
 
 class Nominator:
     """Class responsible for nominating nodes for transactions.
-    """    
-    def __init__(self, g):
+
+    Args:
+        g: NetworkX graph
+        participation_decay: Factor to multiply node's weight after being selected as main.
+            Default 1.0 (no decay). Lower values (e.g., 0.5) spread participation more evenly.
+    """
+    def __init__(self, g, participation_decay=1.0):
         self.g = g
+        self.participation_decay = participation_decay
         self.remaining_count_dict = dict()
         self.used_count_dict = dict()
         self.model_params_dict = dict()
-        
+
         self.type_candidates = dict()
         self.current_candidate_index = dict()
         self.current_type_index = dict()
+
+        # Track selection weights per node (for participation decay)
+        self.weights = defaultdict(lambda: 1.0)
 
     def initialize_count(self, type, count, schedule_id, min_accounts, max_accounts, min_period, max_period, bank_id):
         """Counts the number of nodes of a given type.
@@ -127,46 +137,67 @@ class Nominator:
 
 
     def next(self, type):
-        """Returns the next node id of a given type.
+        """Returns the next node id of a given type using weighted selection.
+
+        Uses participation decay to spread selections across nodes. Each time a node
+        is selected as main, its weight is multiplied by participation_decay.
 
         Args:
             type (string): type of node to return
 
         Returns:
             int: node id of next node of given type.
-        """         
-        node_id = self.type_candidates[type][self.current_candidate_index[type]] # get next node id from type candidates
-        
-        # if fan pattern, double check there are enough neighbors for node_id to be main in the current fan pattern
+        """
+        candidates = self.type_candidates[type]
+        if not candidates:
+            self.conclude(type)
+            return None
+
+        # For fan patterns, filter to candidates meeting structural requirements
         if type == "fan_in" or type == "fan_out":
-            current_threshold = self.model_params_dict[type][self.current_type_index[type]][1] - 1 # get threshold for current type
-            node_fullfill_requirement = not self.is_done(node_id, type, current_threshold)
-            
-            start_indx = self.current_candidate_index[type]
-            
-            while not node_fullfill_requirement:
-                self.current_candidate_index[type] += 1 # check the next node in the list of candidates
-                
-                if self.current_candidate_index[type] > len(self.type_candidates[type])-1:
-                    self.current_candidate_index[type] = 0 # if we reach the end of the list, start from the beginning
-                    
-                # if we exhaust the nodes without finding one fullfilling requirements, 
-                if self.current_candidate_index[type] == start_indx:
-                    node_id = None
-                    self.decrement(type)
-                    self.current_type_index[type] += 1
-                    return node_id
-                
-                node_id = self.type_candidates[type][self.current_candidate_index[type]]
-                node_fullfill_requirement = not self.is_done(node_id, type, current_threshold)
-                
+            current_threshold = self.model_params_dict[type][self.current_type_index[type]][1] - 1
+            valid_candidates = [n for n in candidates if not self.is_done(n, type, current_threshold)]
+        else:
+            valid_candidates = candidates
+
+        if not valid_candidates:
+            self.decrement(type)
+            self.current_type_index[type] += 1
+            return None
+
+        # Use weighted random selection
+        node_id = self._weighted_choice(valid_candidates)
 
         if node_id is None:
             self.conclude(type)
         else:
             self.decrement(type)
             self.increment_used(type)
+            # Apply participation decay
+            self.weights[node_id] *= self.participation_decay
         return node_id
+
+    def _weighted_choice(self, candidates):
+        """Select a candidate using weights, respecting participation decay."""
+        if not candidates:
+            return None
+
+        weights = [self.weights[c] for c in candidates]
+        total = sum(weights)
+
+        if total <= 0:
+            # All weights decayed to ~0, fall back to uniform
+            return random.choice(candidates)
+
+        # Normalize and select
+        r = random.random() * total
+        cumsum = 0
+        for c, w in zip(candidates, weights):
+            cumsum += w
+            if r <= cumsum:
+                return c
+
+        return candidates[-1]  # Fallback due to floating point
 
 
     def types(self):
@@ -218,18 +249,18 @@ class Nominator:
 
 
     def post_update(self, node_id, type):
-        
-        self.current_type_index[type] += 1 # increment the index of the current type
-        
-        if self.is_done(node_id, type): # check if node will be able to be main in other fan_in patterns
-            self.type_candidates[type].pop(self.current_candidate_index[type]) # remove node_id from list of candidates (if popped, we dont need to increase index)
-            if len(self.type_candidates[type]) == 0: # if there are no more candidates, conclude the type
+        """Update candidate list after a node is selected as main.
+
+        Removes the node from candidates if it can no longer be main for this pattern type.
+        """
+        self.current_type_index[type] += 1  # increment the index of the current type
+
+        if self.is_done(node_id, type):  # check if node can still be main in other patterns of this type
+            # Remove node from candidates list
+            if node_id in self.type_candidates[type]:
+                self.type_candidates[type].remove(node_id)
+            if len(self.type_candidates[type]) == 0:  # if no more candidates, conclude
                 self.conclude(type)
-        else:
-            self.current_candidate_index[type] += 1 # increment index (this is to allow next node considered to be different)
-        
-        if self.current_candidate_index[type] >= len(self.type_candidates[type]): # if index is out of bounds, start from beginning
-            self.current_candidate_index[type] = 0
 
     
     def is_done(self, node_id, type, threshold=None):

@@ -100,7 +100,7 @@ class DataGenerator:
 
             # Step 1: Generate degree distribution if needed (goes to spatial output)
             degree_path = spatial_output / degree_file
-            if not degree_path.exists():
+            if force or not degree_path.exists():
                 logger.info(f"  [1/2] Generating degree distribution...")
                 start = time.time()
                 # Call directly with config dict (has absolute paths)
@@ -223,7 +223,7 @@ class DataGenerator:
 
             # Step 1: Generate degree distribution if needed (goes to spatial output)
             degree_path = Path(output_dir) / degree_file
-            if not degree_path.exists():
+            if force or not degree_path.exists():
                 logger.info(f"  [1/2] Generating degree distribution...")
                 start = time.time()
                 generate_scalefree.generate_degree_file_from_config(self.config)

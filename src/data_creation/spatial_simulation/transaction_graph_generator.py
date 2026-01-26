@@ -638,7 +638,11 @@ class TransactionGenerator:
         """
         header = next(reader)
 
-        self.nominator = Nominator(self.g)
+        # Get participation decay from config (default 1.0 = no decay for backward compatibility)
+        normal_patterns_conf = self.conf.get('normal_patterns', {})
+        participation_decay = normal_patterns_conf.get('participation_decay', 1.0)
+
+        self.nominator = Nominator(self.g, participation_decay=participation_decay)
 
         for row in reader:
             count = int(row[header.index('count')])
