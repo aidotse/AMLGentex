@@ -75,13 +75,15 @@ optimisation_bounds:
   # ML Selector parameters (controls biased account selection for AML patterns)
   ml_selector:
     structure_weights:
-      degree: [0.1, 0.5]
-      betweenness: [0.1, 0.5]
-      pagerank: [0.1, 0.5]
+      degree: [-0.3, 0.3]
+      betweenness: [-0.3, 0.3]
+      pagerank: [-0.3, 0.3]
     kyc_weights:
-      init_balance: [0.0, 0.2]
-      salary: [0.0, 0.1]
-      age: [0.0, 0.1]
+      init_balance: [-0.2, 0.2]  # Negative = prefer low-balance accounts
+      salary: [-0.1, 0.1]
+      age: [-0.1, 0.1]
+    propagation_weights:
+      city: [0.0, 0.5]  # Controls geographic/network clustering of SAR accounts
     participation_decay: [0.1, 0.3]
 scale-free:
   # Truncated discrete power law parameters: P(K=k) ∝ k^(-gamma), k ∈ {kmin, ..., kmax}
@@ -90,6 +92,10 @@ scale-free:
   # kmax: null         # Maximum degree (defaults to n-1 if not specified)
   # gamma: 2.0         # Power law exponent (if not provided, solved from average_degree)
   average_degree: 2.0  # Target mean degree (used to solve for gamma if gamma not provided)
+normal_patterns:
+  # Controls how main accounts are selected for normal transaction patterns.
+  # Participation decay prevents high-degree nodes from dominating pattern membership.
+  participation_decay: 0.5  # Factor applied after each selection (0.5 = halve weight each time)
 ml_selector:
   # Money Laundering Account Selector Configuration
   # Controls biased selection of accounts for AML typology injection

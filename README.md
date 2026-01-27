@@ -158,13 +158,15 @@ The spatial stage creates the transaction network topology. This determines whic
 
 #### 1. Scale-Free Network Blueprint
 
-AMLGentex generates scale-free networks where node degree follows a truncated discrete power-law distribution:
+AMLGentex generates scale-free networks where node degree follows a truncated discrete power-law distribution with exponential cutoff:
 
-$$P(K=k) \propto k^{-\gamma}, \quad k \in \{k_{\min}, \ldots, k_{\max}\}$$
+$$P(K=k) \propto k^{-\gamma} \exp\left(-\frac{2k}{k_{\max}}\right), \quad k \in \{k_{\min}, \ldots, k_{\max}\}$$
+
+The exponential cutoff provides softer tail truncation, more realistic for finite-size networks and preventing extreme degree concentration near k_max.
 
 **Parameters:**
 - **`kmin`**: Minimum degree (default: 1)
-- **`kmax`**: Maximum degree (default: n-1, capped for simple graphs)
+- **`kmax`**: Maximum degree (default: floor(√n), capped at n-1 for simple graphs)
 - **`gamma`**: Power-law exponent (optional - solved from average_degree if not provided)
 - **`average_degree`**: Target mean degree (specify this OR gamma)
 
@@ -172,11 +174,44 @@ $$P(K=k) \propto k^{-\gamma}, \quad k \in \{k_{\min}, \ldots, k_{\max}\}$$
 
 The expected degree for a given γ is:
 
-$$\mu(\gamma) = \frac{\sum_{k=k_{\min}}^{k_{\max}} k^{1-\gamma}}{\sum_{k=k_{\min}}^{k_{\max}} k^{-\gamma}}$$
+$$\mu(\gamma) = \frac{\sum_{k=k_{\min}}^{k_{\max}} k \cdot k^{-\gamma} \exp(-2k/k_{\max})}{\sum_{k=k_{\min}}^{k_{\max}} k^{-\gamma} \exp(-2k/k_{\max})}$$
 
 This function is strictly decreasing in γ: smaller γ → heavier tail → larger mean; larger γ → mass concentrates at k_min → smaller mean.
 
-Given a target average degree, we solve μ(γ) = target using Brent's method. Truncation (finite k_max) guarantees a finite mean for any γ > 0, and monotonicity ensures a unique solution.
+Given a target average degree, we solve μ(γ) = target using Brent's method. The exponential cutoff ensures smooth decay near k_max, and monotonicity guarantees a unique solution.
+
+**Example: n=10,000 nodes (kmax=100)**
+
+| Target Mean | γ |
+|-------------|-------|
+| 1.5 | 2.67 |
+| 2.0 | 2.23 |
+| 3.0 | 1.85 |
+| 5.0 | 1.49 |
+| 10.0 | 1.06 |
+| 20.0 | 0.58 |
+
+**Survival function P(K > k):**
+
+| k | μ=1.5 | μ=2.0 | μ=3.0 | μ=5.0 | μ=10.0 | μ=20.0 |
+|-----|-------|-------|-------|-------|--------|--------|
+| 1 | 21.1% | 30.3% | 41.4% | 54.5% | 72.2% | 88.7% |
+| 5 | 2.2% | 5.2% | 11.0% | 20.9% | 40.2% | 66.7% |
+| 10 | 0.6% | 1.9% | 5.0% | 11.3% | 26.3% | 51.7% |
+| 20 | 0.1% | 0.6% | 1.9% | 5.1% | 14.4% | 34.1% |
+| 50 | <0.1% | 0.1% | 0.3% | 1.0% | 3.7% | 11.3% |
+| 90 | <0.1% | <0.1% | <0.1% | 0.1% | 0.3% | 1.2% |
+
+**Expected nodes with degree > k (n=10,000):**
+
+| k | μ=1.5 | μ=2.0 | μ=3.0 | μ=5.0 | μ=10.0 | μ=20.0 |
+|-----|-------|-------|-------|-------|--------|--------|
+| 10 | 62 | 192 | 498 | 1,133 | 2,633 | 5,175 |
+| 20 | 14 | 58 | 186 | 509 | 1,441 | 3,415 |
+| 50 | 1 | 7 | 29 | 99 | 365 | 1,128 |
+| 90 | <1 | <1 | 2 | 8 | 33 | 121 |
+
+The exponential cutoff smoothly suppresses extreme degrees rather than imposing a hard wall at kmax.
 
 #### 2. Pattern Injection
 

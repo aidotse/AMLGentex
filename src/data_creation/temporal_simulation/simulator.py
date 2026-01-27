@@ -502,11 +502,38 @@ class AMLSimulator:
             for tx in scheduled_txs:
                 from_account = tx['from']
                 to_account = tx['to']
-                amount = tx['amount']
                 tx_type = tx['type']
+
+                # Handle dependent transactions (scatter phase of gather-scatter)
+                # These have amount=None and reference incoming transactions
+                if tx.get('amount') is None and '_incoming_refs' in tx:
+                    # Compute amount based on actual successful incoming transactions
+                    incoming_refs = tx['_incoming_refs']
+                    proportion = tx['_proportion']
+                    margin_ratio = tx['_margin_ratio']
+
+                    # Sum the actual amounts from successful incoming transactions
+                    total_incoming = sum(
+                        ref.get('_actual_amount', 0)
+                        for ref in incoming_refs
+                        if ref.get('_success', False)
+                    )
+
+                    # Compute outgoing amount: total * (1 - margin) * proportion
+                    amount = total_incoming * (1 - margin_ratio) * proportion
+
+                    if amount <= 0:
+                        # No successful incoming, skip this outgoing transaction
+                        continue
+                else:
+                    amount = tx['amount']
 
                 # Attempt the transaction
                 success = from_account.make_transaction(to_account, amount, tx_type)
+
+                # Track success and actual amount for dependent transactions
+                tx['_success'] = success
+                tx['_actual_amount'] = amount if success else 0
 
                 if success:
                     transactions.append({

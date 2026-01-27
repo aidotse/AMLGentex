@@ -4,7 +4,12 @@ Generate scale-free degree distribution using truncated discrete power law.
 This module implements proper discrete power-law sampling for directed graphs,
 following the specification for truncated discrete power law on k = kmin..kmax.
 
-P(K=k) ∝ k^(-gamma), k ∈ {kmin, ..., kmax}
+Distribution forms:
+- Pure power law:          P(K=k) ∝ k^(-gamma)
+- With exponential cutoff: P(K=k) ∝ k^(-gamma) * exp(-2k/kmax)
+
+The exponential cutoff provides a softer tail truncation, more realistic for
+finite-size networks and preventing extreme degree concentration at kmax.
 """
 
 import numpy as np
@@ -22,7 +27,12 @@ from typing import Tuple, Optional, Dict, Any
 
 def truncated_discrete_powerlaw_pmf(k_values: np.ndarray, gamma: float) -> np.ndarray:
     """
-    Compute PMF for truncated discrete power law: P(K=k) ∝ k^(-gamma).
+    Compute PMF for truncated discrete power law with exponential cutoff.
+
+    P(K=k) ∝ k^(-gamma) * exp(-2k/kmax)
+
+    where kmax is inferred from max(k_values). The exponential cutoff provides
+    a softer tail truncation, more realistic for finite networks.
 
     Args:
         k_values: Array of integer degree values (support of distribution)
@@ -34,13 +44,17 @@ def truncated_discrete_powerlaw_pmf(k_values: np.ndarray, gamma: float) -> np.nd
     if gamma <= 0.0:
         raise ValueError(f"gamma must be > 0.0, got {gamma}")
 
-    unnormalized = np.power(k_values.astype(float), -gamma)
+    kmax = k_values.max()
+
+    # Power law with exponential cutoff
+    unnormalized = np.power(k_values.astype(float), -gamma) * np.exp(-2.0 * k_values / kmax)
+
     return unnormalized / unnormalized.sum()
 
 
 def truncated_discrete_powerlaw_mean(kmin: int, kmax: int, gamma: float) -> float:
     """
-    Compute mean of truncated discrete power law.
+    Compute mean of truncated discrete power law with exponential cutoff.
 
     Args:
         kmin: Minimum degree (inclusive)
@@ -59,7 +73,7 @@ def solve_gamma_for_mean(
     kmin: int,
     kmax: int,
     target_mean: float,
-    gamma_bounds: Tuple[float, float] = (1.01, 20.0)
+    gamma_bounds: Tuple[float, float] = (0.01, 20.0)
 ) -> float:
     """
     Solve for gamma such that truncated discrete power law has target mean.
@@ -70,7 +84,7 @@ def solve_gamma_for_mean(
         kmin: Minimum degree
         kmax: Maximum degree
         target_mean: Desired mean degree
-        gamma_bounds: Search bounds for gamma (default: 1.01 to 20.0)
+        gamma_bounds: Search bounds for gamma (default: 0.01 to 20.0)
 
     Returns:
         gamma value that achieves target_mean
@@ -110,7 +124,7 @@ def sample_truncated_discrete_powerlaw(
     rng: np.random.Generator
 ) -> np.ndarray:
     """
-    Sample n values from truncated discrete power law.
+    Sample n values from truncated discrete power law with exponential cutoff.
 
     Args:
         n: Number of samples
@@ -233,10 +247,12 @@ def discrete_powerlaw_degree_distribution(
     Samples in-degrees and out-degrees separately from the same distribution,
     then balances sums with integer-only adjustments.
 
+    Distribution: P(K=k) ∝ k^(-gamma) * exp(-2k/kmax)
+
     Args:
         n: Number of nodes
         kmin: Minimum degree (default: 1)
-        kmax: Maximum degree (default: n-1)
+        kmax: Maximum degree (default: floor(sqrt(n)))
         gamma: Power law exponent. If None, solved from average_degree.
         average_degree: Target mean degree. Required if gamma is None.
         seed: Random seed
@@ -256,7 +272,7 @@ def discrete_powerlaw_degree_distribution(
     if kmin < 0:
         raise ValueError(f"kmin must be >= 0, got {kmin}")
     if kmax is None:
-        kmax = n - 1
+        kmax = min(int(np.floor(np.sqrt(n))), n - 1)
     if kmax < kmin:
         raise ValueError(f"kmax ({kmax}) must be >= kmin ({kmin})")
     if kmax > n - 1:
@@ -379,7 +395,7 @@ def generate_degree_file_from_config(config: dict) -> dict:
     scale_free_params = config["scale-free"]
     gamma = scale_free_params.get("gamma", None)
     kmin = int(scale_free_params.get("kmin", scale_free_params.get("loc", 1)))
-    kmax = scale_free_params.get("kmax", n - 1)
+    kmax = scale_free_params.get("kmax", None)
     if kmax is not None:
         kmax = int(kmax)
     average_degree = scale_free_params.get("average_degree", None)

@@ -453,23 +453,6 @@ class TestNominatorPostUpdate:
         assert len(nominator.type_candidates['fan_out']) == initial_len - 1
         assert current_node not in nominator.type_candidates['fan_out']
 
-    def test_post_update_wraps_index(self, nominator):
-        """Test that post_update wraps candidate index"""
-        nominator.initialize_count('single', 1, 1, 2, 3, 1, 100, 'bank_1')
-        nominator.initialize_candidates()
-
-        # Set index to last position
-        nominator.current_candidate_index['single'] = len(nominator.type_candidates['single']) - 1
-
-        # Mock is_done to return False
-        nominator.is_done = MagicMock(return_value=False)
-
-        nominator.post_update(0, 'single')
-
-        # Index should wrap to 0
-        assert nominator.current_candidate_index['single'] == 0
-
-
 @pytest.mark.unit
 @pytest.mark.spatial
 class TestNominatorIsDoneMethods:

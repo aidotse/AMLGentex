@@ -418,6 +418,9 @@ class AlertPattern:
         Generates random connections between phases and implements amount splitting.
         Phase 0: originators, Phase 1: intermediaries, Phase 2: beneficiaries
         Pattern: originators → intermediaries → beneficiaries
+
+        The gather phase amounts are computed as proportions of the total scheduled
+        incoming to each intermediary, ensuring that outgoing = incoming * (1 - margin_ratio).
         """
         if not self.phase_layers:
             # Fallback to simple pattern if no phase information
@@ -439,49 +442,53 @@ class AlertPattern:
 
         # Phase 1: Generate random connections from originators to intermediaries
         # Each intermediary receives from 1-N originators (random)
-        intermediary_connections = {}  # intermediary -> [(originator, amount, step)]
+        intermediary_incoming_txs = {}  # intermediary -> list of incoming transaction dicts
 
         for intermediary in intermediaries:
             # Each intermediary receives from 1-3 random originators
             n_sources = min(len(originators), self.random_state.randint(1, 4))
             sources = self.random_state.choice(originators, size=n_sources, replace=False)
 
-            intermediary_connections[intermediary] = []
+            intermediary_incoming_txs[intermediary] = []
             for source in sources:
                 amount = self._sample_amount()
                 step = self.random_state.randint(self.start_step, self.start_step + period // 2)
-                schedule.append({
+                tx = {
                     'step': step,
                     'from': source,
                     'to': intermediary,
                     'amount': amount,
                     'type': 'TRANSFER'
-                })
-                intermediary_connections[intermediary].append((source, amount, step))
+                }
+                schedule.append(tx)
+                intermediary_incoming_txs[intermediary].append(tx)
 
         # Phase 2: Generate random connections from intermediaries to beneficiaries
         # Each intermediary splits its total received among 1-M beneficiaries
-        for intermediary, incoming in intermediary_connections.items():
-            # Calculate total received (with margin for fees)
-            total_received = sum(amt for _, amt, _ in incoming) * (1 - self.margin_ratio)
-            latest_receive_step = max(step for _, _, step in incoming)
+        # Outgoing amounts reference the incoming transactions for proportional scaling
+        for intermediary, incoming_txs in intermediary_incoming_txs.items():
+            latest_receive_step = max(tx['step'] for tx in incoming_txs)
 
             # Each intermediary sends to 1-3 random beneficiaries
             n_targets = min(len(beneficiaries), self.random_state.randint(1, 4))
             targets = self.random_state.choice(beneficiaries, size=n_targets, replace=False)
 
-            # Split total_received randomly among targets using Dirichlet distribution
+            # Split among targets using Dirichlet distribution (proportions sum to 1)
             proportions = self.random_state.dirichlet(np.ones(n_targets))
 
             for target, proportion in zip(targets, proportions):
-                amount = total_received * proportion
                 step = self.random_state.randint(latest_receive_step + 1, self.end_step)
+                # Mark this as a dependent transaction that references incoming txs
+                # The amount will be computed as: sum(incoming amounts) * (1 - margin) * proportion
                 schedule.append({
                     'step': step,
                     'from': intermediary,
                     'to': target,
-                    'amount': amount,
-                    'type': 'TRANSFER'
+                    'amount': None,  # Will be computed at execution time
+                    'type': 'TRANSFER',
+                    '_incoming_refs': incoming_txs,  # Reference to incoming transactions
+                    '_proportion': proportion,
+                    '_margin_ratio': self.margin_ratio
                 })
 
         return schedule
@@ -493,6 +500,9 @@ class AlertPattern:
         Generates random connections between phases and implements amount splitting.
         Phase 0: hubs, Phase 1: sources, Phase 2: targets
         Pattern: sources → hubs → targets
+
+        The scatter phase amounts are computed as proportions of the total scheduled
+        incoming to each hub, ensuring that outgoing = incoming * (1 - margin_ratio).
         """
         if not self.phase_layers:
             # Fallback to simple pattern
@@ -516,49 +526,53 @@ class AlertPattern:
 
         # Phase 1: Generate random connections from sources to hubs (gather)
         # Each hub receives from 1-N sources (random)
-        hub_connections = {}  # hub -> [(source, amount, step)]
+        hub_incoming_txs = {}  # hub -> list of incoming transaction dicts
 
         for hub in hubs:
             # Each hub receives from 1-3 random sources
             n_sources = min(len(sources), self.random_state.randint(1, 4))
             senders = self.random_state.choice(sources, size=n_sources, replace=False)
 
-            hub_connections[hub] = []
+            hub_incoming_txs[hub] = []
             for sender in senders:
                 amount = self._sample_amount()
                 step = self.random_state.randint(self.start_step, self.start_step + period // 2)
-                schedule.append({
+                tx = {
                     'step': step,
                     'from': sender,
                     'to': hub,
                     'amount': amount,
                     'type': 'TRANSFER'
-                })
-                hub_connections[hub].append((sender, amount, step))
+                }
+                schedule.append(tx)
+                hub_incoming_txs[hub].append(tx)
 
         # Phase 2: Generate random connections from hubs to targets (scatter)
         # Each hub splits its total received among 1-M targets
-        for hub, incoming in hub_connections.items():
-            # Calculate total received (with margin for fees)
-            total_received = sum(amt for _, amt, _ in incoming) * (1 - self.margin_ratio)
-            latest_receive_step = max(step for _, _, step in incoming)
+        # Outgoing amounts reference the incoming transactions for proportional scaling
+        for hub, incoming_txs in hub_incoming_txs.items():
+            latest_receive_step = max(tx['step'] for tx in incoming_txs)
 
             # Each hub sends to 1-3 random targets
             n_receivers = min(len(targets), self.random_state.randint(1, 4))
             receivers = self.random_state.choice(targets, size=n_receivers, replace=False)
 
-            # Split total_received randomly among receivers using Dirichlet distribution
+            # Split among receivers using Dirichlet distribution (proportions sum to 1)
             proportions = self.random_state.dirichlet(np.ones(n_receivers))
 
             for receiver, proportion in zip(receivers, proportions):
-                amount = total_received * proportion
                 step = self.random_state.randint(latest_receive_step + 1, self.end_step)
+                # Mark this as a dependent transaction that references incoming txs
+                # The amount will be computed as: sum(incoming amounts) * (1 - margin) * proportion
                 schedule.append({
                     'step': step,
                     'from': hub,
                     'to': receiver,
-                    'amount': amount,
-                    'type': 'TRANSFER'
+                    'amount': None,  # Will be computed at execution time
+                    'type': 'TRANSFER',
+                    '_incoming_refs': incoming_txs,  # Reference to incoming transactions
+                    '_proportion': proportion,
+                    '_margin_ratio': self.margin_ratio
                 })
 
         return schedule
@@ -597,21 +611,45 @@ class AlertPattern:
 
     def inject_illicit_funds(self):
         """
-        Inject illicit funds into accounts based on source_type.
+        Inject funds into accounts to ensure pattern transactions can succeed.
         For CASH patterns: adds cash_balance to the MAIN account only (matches Java behavior)
-        For TRANSFER patterns: no action needed (funds come from regular balance)
+        For TRANSFER patterns: ensures all senders have sufficient balance for fixed-amount txs
+
+        Note: Dependent transactions (amount=None) are not counted here because their
+        amounts are computed at execution time based on actual successful incoming.
         """
-        if self.source_type != "CASH":
-            return
+        if self.source_type == "CASH":
+            # Only inject cash to the main account (matches Java's depositCash to 'acct')
+            if not self.main_accounts:
+                return
 
-        # Only inject cash to the main account (matches Java's depositCash to 'acct')
-        if not self.main_accounts:
-            return
+            main_account = self.main_accounts[0]
 
-        main_account = self.main_accounts[0]
+            # Calculate total amount from fixed-amount transactions only
+            total_amount = sum(
+                tx['amount'] for tx in self.transaction_schedule
+                if tx.get('amount') is not None
+            )
 
-        # Calculate total amount that will flow through this pattern
-        total_amount = sum(tx['amount'] for tx in self.transaction_schedule)
+            # Inject cash to the main account (add safety margin)
+            main_account.cash_balance = max(total_amount * 1.5, main_account.balance * 0.5)
+        else:
+            # TRANSFER: Ensure all senders have sufficient balance for their transactions
+            # Only count fixed-amount transactions; dependent transactions (amount=None)
+            # will use whatever the sender actually received from successful incoming.
+            sender_amounts = {}
+            for tx in self.transaction_schedule:
+                amount = tx.get('amount')
+                if amount is None:
+                    # Skip dependent transactions - they're computed at execution time
+                    continue
+                sender = tx['from']
+                if sender not in sender_amounts:
+                    sender_amounts[sender] = 0
+                sender_amounts[sender] += amount
 
-        # Inject cash to the main account (add safety margin)
-        main_account.cash_balance = max(total_amount * 1.5, main_account.balance * 0.5)
+            # Add balance to senders that need it (with safety margin)
+            for sender, total_needed in sender_amounts.items():
+                if sender.balance < total_needed:
+                    shortfall = total_needed - sender.balance
+                    sender.balance += shortfall * 1.5  # Add 50% safety margin

@@ -340,13 +340,13 @@ class TestDiscretePowerlawDegreeDistribution:
                 n=100, kmin=10, kmax=5, average_degree=5.0, seed=42
             )
 
-    def test_default_kmax_is_n_minus_1(self):
-        """Default kmax should be n-1."""
+    def test_default_kmax_is_sqrt_n(self):
+        """Default kmax should be floor(sqrt(n))."""
         n = 100
         _, _, stats = discrete_powerlaw_degree_distribution(
-            n=n, kmin=1, average_degree=5.0, seed=42
+            n=n, kmin=1, average_degree=3.0, seed=42
         )
-        assert stats['kmax'] == n - 1
+        assert stats['kmax'] == int(np.floor(np.sqrt(n)))  # 10 for n=100
 
     def test_reproducible_with_seed(self):
         """Same seed should give same results."""
@@ -458,7 +458,7 @@ class TestGenerateDegreeFileFromConfig:
             'spatial': {'directory': str(spatial_dir)},
             'scale-free': {
                 'loc': 2,  # Legacy parameter
-                'average_degree': 5.0
+                'average_degree': 3.0  # Lower target for kmax=sqrt(100)=10
             }
         }
 
