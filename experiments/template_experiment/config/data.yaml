@@ -62,7 +62,7 @@ scale-free:
   kmin: 1              # Minimum degree (replaces legacy 'loc' parameter)
   # kmax: null         # Maximum degree (defaults to floor(sqrt(n)) if not specified)
   # gamma: 2.0         # Power law exponent (if not provided, solved from average_degree)
-  average_degree: 2.0  # Target mean degree (used to solve for gamma if gamma not provided)
+  average_degree: 4.0  # Target mean degree (used to solve for gamma if gamma not provided)
 normal_patterns:
   # Controls how main accounts are selected for normal transaction patterns.
   # Participation decay prevents high-degree nodes from dominating pattern membership.
@@ -132,15 +132,15 @@ optimisation_bounds:
   temporal:
     mean_amount_sar: [600, 900]
     std_amount_sar: [200, 400]
-    mean_outcome_sar: [300, 600]
-    std_outcome_sar: [100, 200]
-    prob_spend_cash: [0.1, 0.5]
+    mean_outcome_sar: [450, 550]
+    std_outcome_sar: [50, 100]
+    prob_spend_cash: [0.0, 0.1]
     mean_phone_change_frequency_sar: [1260, 1460]
     std_phone_change_frequency_sar: [265, 465]
     mean_bank_change_frequency_sar: [1260, 1460]
     std_bank_change_frequency_sar: [265, 465]
     prob_participate_in_multiple_sars: [0.0, 0.5]
-    mean_duration_alert: [10.0, 30.0]
+    mean_duration_alert: [30.0, 60.0]
     std_duration_alert: [5.0, 20.0]
     burstiness_bias_alert: [-4.0, 4.0]
   # ML Selector parameters (controls biased account selection for AML patterns)
@@ -154,5 +154,5 @@ optimisation_bounds:
       salary: [-0.1, 0.1]
       age: [-0.1, 0.1]
     propagation_weights:
-      city: [0.0, 0.5]  # Controls geographic/network clustering of SAR accounts
+      city: [0.0, 0.2]  # Controls geographic/network clustering of SAR accounts
     participation_decay: [0.1, 0.3]

@@ -88,6 +88,8 @@ class PatternScheduler:
         if start_step >= end_step:
             return [start_step] * num_transactions  # All at start_step if no valid range
 
+        period = end_step - start_step
+
         if num_transactions == 1:
             # Single transaction: place randomly in period
             return [random_state.randint(start_step, end_step)]
@@ -102,11 +104,39 @@ class PatternScheduler:
         fractions = np.sort(fractions)
 
         # Map fractions to actual steps in [start_step, end_step)
-        period = end_step - start_step
         steps = start_step + (fractions * period).astype(int)
 
         # Ensure all steps are within bounds
         steps = np.clip(steps, start_step, end_step - 1)
+
+        # If we have enough steps to spread transactions uniquely, do so to avoid
+        # artificial min_gap=0 from integer discretization collisions
+        if num_transactions <= period:
+            # Spread transactions to unique steps while preserving relative ordering
+            # Use the beta-sampled order but assign to unique integer steps
+            unique_steps = np.unique(steps)
+            if len(unique_steps) < num_transactions:
+                # We have collisions - redistribute to unique steps
+                # Sample unique steps weighted by beta distribution density
+                available_steps = np.arange(start_step, end_step)
+
+                # Weight steps by beta distribution to preserve burstiness character
+                step_fractions = (available_steps - start_step) / period
+                weights = random_state.beta(alpha, beta, len(available_steps)) + 0.01
+                weights = weights / weights.sum()
+
+                # Sample without replacement to get unique steps
+                n_to_sample = min(num_transactions, len(available_steps))
+                chosen_steps = random_state.choice(
+                    available_steps, size=n_to_sample, replace=False, p=weights
+                )
+                steps = np.sort(chosen_steps)
+
+                # If we need more transactions than available steps, repeat some
+                if num_transactions > len(available_steps):
+                    extra_needed = num_transactions - len(available_steps)
+                    extra_steps = random_state.choice(available_steps, size=extra_needed)
+                    steps = np.sort(np.concatenate([steps, extra_steps]))
 
         return steps.tolist()
 
@@ -298,6 +328,8 @@ class AlertPattern:
         Uses phase information from spatial generation to create layered bipartite structure.
         Each phase is a layer, and transactions flow from layer i to layer i+1.
         Phase 0 = layer 0, Phase 1 = layer 1, etc.
+
+        Uses PatternScheduler.get_transaction_steps() for burstiness-aware step scheduling.
         """
         if not self.phase_layers:
             # Fallback to simple chain if no phase information available
@@ -353,7 +385,8 @@ class AlertPattern:
 
             # For first layer, sample initial amounts
             if i == 0:
-                # First layer: each account sends to 1-3 accounts in next layer
+                # First pass: determine all connections for this layer transition
+                layer_connections = []  # list of (from_acc, to_acc, amount) tuples
                 for from_acc in layer_from:
                     num_targets = min(len(layer_to), self.random_state.randint(1, 4))
                     targets = self.random_state.choice(layer_to, size=num_targets, replace=False)
@@ -364,17 +397,29 @@ class AlertPattern:
 
                     for to_acc, proportion in zip(targets, proportions):
                         amount = total_amount * proportion
-                        step = self.random_state.randint(layer_start, layer_end)
-                        schedule.append({
-                            'step': step,
-                            'from': from_acc,
-                            'to': to_acc,
-                            'amount': amount,
-                            'type': 'TRANSFER'
-                        })
-                        account_incoming[to_acc].append((from_acc, amount, step))
+                        layer_connections.append((from_acc, to_acc, amount))
+
+                # Generate steps using PatternScheduler for burstiness-aware scheduling
+                layer_steps = PatternScheduler.get_transaction_steps(
+                    layer_start, layer_end, len(layer_connections),
+                    self.burstiness_level, self.random_state
+                )
+
+                # Create transactions
+                for (from_acc, to_acc, amount), step in zip(layer_connections, layer_steps):
+                    schedule.append({
+                        'step': step,
+                        'from': from_acc,
+                        'to': to_acc,
+                        'amount': amount,
+                        'type': 'TRANSFER'
+                    })
+                    account_incoming[to_acc].append((from_acc, amount, step))
             else:
                 # Subsequent layers: split received amounts among outgoing connections
+                # First pass: determine all connections
+                layer_connections = []  # list of (from_acc, to_acc, amount) tuples
+
                 for from_acc in layer_from:
                     if from_acc not in account_incoming:
                         continue  # Skip accounts with no incoming
@@ -382,7 +427,6 @@ class AlertPattern:
                     # Calculate total received (with margin for fees)
                     incoming = account_incoming[from_acc]
                     total_received = sum(amt for _, amt, _ in incoming) * (1 - self.margin_ratio)
-                    latest_receive_step = max(step for _, _, step in incoming)
 
                     # Send to 1-3 accounts in next layer
                     num_targets = min(len(layer_to), self.random_state.randint(1, 4))
@@ -393,21 +437,40 @@ class AlertPattern:
 
                     for to_acc, proportion in zip(targets, proportions):
                         amount = total_received * proportion
-                        send_start = max(layer_start, latest_receive_step + 1)
-                        # Ensure send_start < layer_end
-                        if send_start >= layer_end:
-                            send_start = layer_end - 1
-                        if send_start < layer_start:
-                            send_start = layer_start
-                        step = self.random_state.randint(send_start, layer_end)
-                        schedule.append({
-                            'step': step,
-                            'from': from_acc,
-                            'to': to_acc,
-                            'amount': amount,
-                            'type': 'TRANSFER'
-                        })
-                        account_incoming[to_acc].append((from_acc, amount, step))
+                        layer_connections.append((from_acc, to_acc, amount))
+
+                if not layer_connections:
+                    continue
+
+                # Determine effective start: after latest incoming from previous layer
+                latest_prev_step = max(
+                    step for acc in layer_from if acc in account_incoming
+                    for _, _, step in account_incoming[acc]
+                ) if any(acc in account_incoming for acc in layer_from) else layer_start
+                effective_start = max(layer_start, latest_prev_step + 1)
+
+                # Ensure we have valid range
+                if effective_start >= layer_end:
+                    effective_start = layer_end - 1
+                if effective_start < layer_start:
+                    effective_start = layer_start
+
+                # Generate steps using PatternScheduler for burstiness-aware scheduling
+                layer_steps = PatternScheduler.get_transaction_steps(
+                    effective_start, layer_end, len(layer_connections),
+                    self.burstiness_level, self.random_state
+                )
+
+                # Create transactions
+                for (from_acc, to_acc, amount), step in zip(layer_connections, layer_steps):
+                    schedule.append({
+                        'step': step,
+                        'from': from_acc,
+                        'to': to_acc,
+                        'amount': amount,
+                        'type': 'TRANSFER'
+                    })
+                    account_incoming[to_acc].append((from_acc, amount, step))
 
         return schedule
 
@@ -421,6 +484,8 @@ class AlertPattern:
 
         The gather phase amounts are computed as proportions of the total scheduled
         incoming to each intermediary, ensuring that outgoing = incoming * (1 - margin_ratio).
+
+        Uses PatternScheduler.get_transaction_steps() for burstiness-aware step scheduling.
         """
         if not self.phase_layers:
             # Fallback to simple pattern if no phase information
@@ -438,55 +503,71 @@ class AlertPattern:
                 intermediaries = self.member_accounts
 
         period = self.end_step - self.start_step
+        phase1_end = self.start_step + period // 2
         schedule = []
 
-        # Phase 1: Generate random connections from originators to intermediaries
-        # Each intermediary receives from 1-N originators (random)
-        intermediary_incoming_txs = {}  # intermediary -> list of incoming transaction dicts
-
+        # Phase 1: First determine all connections, then schedule with PatternScheduler
+        phase1_connections = []  # list of (source, intermediary) tuples
         for intermediary in intermediaries:
-            # Each intermediary receives from 1-3 random originators
             n_sources = min(len(originators), self.random_state.randint(1, 4))
             sources = self.random_state.choice(originators, size=n_sources, replace=False)
-
-            intermediary_incoming_txs[intermediary] = []
             for source in sources:
-                amount = self._sample_amount()
-                step = self.random_state.randint(self.start_step, self.start_step + period // 2)
-                tx = {
-                    'step': step,
-                    'from': source,
-                    'to': intermediary,
-                    'amount': amount,
-                    'type': 'TRANSFER'
-                }
-                schedule.append(tx)
-                intermediary_incoming_txs[intermediary].append(tx)
+                phase1_connections.append((source, intermediary))
 
-        # Phase 2: Generate random connections from intermediaries to beneficiaries
-        # Each intermediary splits its total received among 1-M beneficiaries
-        # Outgoing amounts reference the incoming transactions for proportional scaling
-        for intermediary, incoming_txs in intermediary_incoming_txs.items():
-            latest_receive_step = max(tx['step'] for tx in incoming_txs)
+        # Generate steps for all phase 1 transactions using burstiness-aware scheduling
+        phase1_steps = PatternScheduler.get_transaction_steps(
+            self.start_step, phase1_end, len(phase1_connections),
+            self.burstiness_level, self.random_state
+        )
 
-            # Each intermediary sends to 1-3 random beneficiaries
+        # Create phase 1 transactions
+        intermediary_incoming_txs = {i: [] for i in intermediaries}
+        for (source, intermediary), step in zip(phase1_connections, phase1_steps):
+            amount = self._sample_amount()
+            tx = {
+                'step': step,
+                'from': source,
+                'to': intermediary,
+                'amount': amount,
+                'type': 'TRANSFER'
+            }
+            schedule.append(tx)
+            intermediary_incoming_txs[intermediary].append(tx)
+
+        # Phase 2: First determine all connections, then schedule with PatternScheduler
+        phase2_connections = []  # list of (intermediary, target, incoming_txs, proportion) tuples
+        for intermediary in intermediaries:
+            incoming_txs = intermediary_incoming_txs[intermediary]
+            if not incoming_txs:
+                continue
+
             n_targets = min(len(beneficiaries), self.random_state.randint(1, 4))
             targets = self.random_state.choice(beneficiaries, size=n_targets, replace=False)
-
-            # Split among targets using Dirichlet distribution (proportions sum to 1)
             proportions = self.random_state.dirichlet(np.ones(n_targets))
 
             for target, proportion in zip(targets, proportions):
-                step = self.random_state.randint(latest_receive_step + 1, self.end_step)
-                # Mark this as a dependent transaction that references incoming txs
-                # The amount will be computed as: sum(incoming amounts) * (1 - margin) * proportion
+                phase2_connections.append((intermediary, target, incoming_txs, proportion))
+
+        # Generate steps for all phase 2 transactions
+        # Start after the latest phase 1 step to maintain causality
+        latest_phase1_step = max(tx['step'] for tx in schedule) if schedule else self.start_step
+        phase2_start = latest_phase1_step + 1
+
+        if phase2_start < self.end_step and phase2_connections:
+            phase2_steps = PatternScheduler.get_transaction_steps(
+                phase2_start, self.end_step, len(phase2_connections),
+                self.burstiness_level, self.random_state
+            )
+
+            # Create phase 2 transactions
+            for (intermediary, target, incoming_txs, proportion), step in zip(phase2_connections, phase2_steps):
                 schedule.append({
                     'step': step,
                     'from': intermediary,
                     'to': target,
                     'amount': None,  # Will be computed at execution time
                     'type': 'TRANSFER',
-                    '_incoming_refs': incoming_txs,  # Reference to incoming transactions
+                    '_incoming_refs': incoming_txs,
                     '_proportion': proportion,
                     '_margin_ratio': self.margin_ratio
                 })
@@ -503,6 +584,8 @@ class AlertPattern:
 
         The scatter phase amounts are computed as proportions of the total scheduled
         incoming to each hub, ensuring that outgoing = incoming * (1 - margin_ratio).
+
+        Uses PatternScheduler.get_transaction_steps() for burstiness-aware step scheduling.
         """
         if not self.phase_layers:
             # Fallback to simple pattern
@@ -522,55 +605,71 @@ class AlertPattern:
                 targets = self.member_accounts
 
         period = self.end_step - self.start_step
+        phase1_end = self.start_step + period // 2
         schedule = []
 
-        # Phase 1: Generate random connections from sources to hubs (gather)
-        # Each hub receives from 1-N sources (random)
-        hub_incoming_txs = {}  # hub -> list of incoming transaction dicts
-
+        # Phase 1: First determine all connections, then schedule with PatternScheduler
+        phase1_connections = []  # list of (sender, hub) tuples
         for hub in hubs:
-            # Each hub receives from 1-3 random sources
             n_sources = min(len(sources), self.random_state.randint(1, 4))
             senders = self.random_state.choice(sources, size=n_sources, replace=False)
-
-            hub_incoming_txs[hub] = []
             for sender in senders:
-                amount = self._sample_amount()
-                step = self.random_state.randint(self.start_step, self.start_step + period // 2)
-                tx = {
-                    'step': step,
-                    'from': sender,
-                    'to': hub,
-                    'amount': amount,
-                    'type': 'TRANSFER'
-                }
-                schedule.append(tx)
-                hub_incoming_txs[hub].append(tx)
+                phase1_connections.append((sender, hub))
 
-        # Phase 2: Generate random connections from hubs to targets (scatter)
-        # Each hub splits its total received among 1-M targets
-        # Outgoing amounts reference the incoming transactions for proportional scaling
-        for hub, incoming_txs in hub_incoming_txs.items():
-            latest_receive_step = max(tx['step'] for tx in incoming_txs)
+        # Generate steps for all phase 1 transactions using burstiness-aware scheduling
+        phase1_steps = PatternScheduler.get_transaction_steps(
+            self.start_step, phase1_end, len(phase1_connections),
+            self.burstiness_level, self.random_state
+        )
 
-            # Each hub sends to 1-3 random targets
+        # Create phase 1 transactions
+        hub_incoming_txs = {h: [] for h in hubs}
+        for (sender, hub), step in zip(phase1_connections, phase1_steps):
+            amount = self._sample_amount()
+            tx = {
+                'step': step,
+                'from': sender,
+                'to': hub,
+                'amount': amount,
+                'type': 'TRANSFER'
+            }
+            schedule.append(tx)
+            hub_incoming_txs[hub].append(tx)
+
+        # Phase 2: First determine all connections, then schedule with PatternScheduler
+        phase2_connections = []  # list of (hub, receiver, incoming_txs, proportion) tuples
+        for hub in hubs:
+            incoming_txs = hub_incoming_txs[hub]
+            if not incoming_txs:
+                continue
+
             n_receivers = min(len(targets), self.random_state.randint(1, 4))
             receivers = self.random_state.choice(targets, size=n_receivers, replace=False)
-
-            # Split among receivers using Dirichlet distribution (proportions sum to 1)
             proportions = self.random_state.dirichlet(np.ones(n_receivers))
 
             for receiver, proportion in zip(receivers, proportions):
-                step = self.random_state.randint(latest_receive_step + 1, self.end_step)
-                # Mark this as a dependent transaction that references incoming txs
-                # The amount will be computed as: sum(incoming amounts) * (1 - margin) * proportion
+                phase2_connections.append((hub, receiver, incoming_txs, proportion))
+
+        # Generate steps for all phase 2 transactions
+        # Start after the latest phase 1 step to maintain causality
+        latest_phase1_step = max(tx['step'] for tx in schedule) if schedule else self.start_step
+        phase2_start = latest_phase1_step + 1
+
+        if phase2_start < self.end_step and phase2_connections:
+            phase2_steps = PatternScheduler.get_transaction_steps(
+                phase2_start, self.end_step, len(phase2_connections),
+                self.burstiness_level, self.random_state
+            )
+
+            # Create phase 2 transactions
+            for (hub, receiver, incoming_txs, proportion), step in zip(phase2_connections, phase2_steps):
                 schedule.append({
                     'step': step,
                     'from': hub,
                     'to': receiver,
                     'amount': None,  # Will be computed at execution time
                     'type': 'TRANSFER',
-                    '_incoming_refs': incoming_txs,  # Reference to incoming transactions
+                    '_incoming_refs': incoming_txs,
                     '_proportion': proportion,
                     '_margin_ratio': self.margin_ratio
                 })

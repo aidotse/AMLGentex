@@ -131,6 +131,7 @@ DecisionTreeClassifier:
     criterion: gini
     splitter: best
     random_state: 42
+    max_depth: 10
     class_weight: balanced
   search_space:
     criterion: {type: categorical, values: [gini, entropy, log_loss]}

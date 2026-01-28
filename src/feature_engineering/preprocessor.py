@@ -1147,12 +1147,27 @@ class DataPreprocessor:
                 if len(sar_vals) > 0 and len(non_sar_vals) > 0:
                     sar_median = np.median(sar_vals)
                     non_sar_median = np.median(non_sar_vals)
+                    sar_mean = np.mean(sar_vals)
+                    non_sar_mean = np.mean(non_sar_vals)
 
-                    if non_sar_median != 0:
+                    # Use absolute values for comparison
+                    sar_abs = max(abs(sar_median), abs(sar_mean))
+                    non_sar_abs = max(abs(non_sar_median), abs(non_sar_mean))
+
+                    if non_sar_abs < 0.01 and sar_abs < 0.01:
+                        # Both groups essentially zero - no meaningful difference
+                        ratio = 1.0
+                    elif abs(non_sar_median) > 1e-6 and np.sign(sar_median) == np.sign(non_sar_median):
+                        # Same sign - normal ratio
                         ratio = sar_median / non_sar_median
-                    elif sar_median != 0:
-                        ratio = float('inf') if sar_median > 0 else float('-inf')
+                    elif abs(non_sar_median) > 1e-6:
+                        # Different signs - use absolute ratio, show SAR is "different"
+                        ratio = abs(sar_median / non_sar_median)
+                    elif abs(non_sar_mean) > 1e-6 and np.sign(sar_mean) == np.sign(non_sar_mean):
+                        # Fallback to mean if same sign
+                        ratio = sar_mean / non_sar_mean
                     else:
+                        # Can't compute meaningful ratio
                         ratio = 1.0
 
                     ratios.append(ratio)
@@ -1178,20 +1193,21 @@ class DataPreprocessor:
                 # Color bars based on ratio (green = SAR higher, red = SAR lower)
                 colors = ['green' if r > 1.1 else 'red' if r < 0.9 else 'gray' for r in ratios]
 
-                # Use log scale for ratios
-                log_ratios = [np.log2(max(r, 0.01)) if r > 0 else -10 for r in ratios]
+                # Use linear scale centered at 1.0 (no difference)
+                # Plot (ratio - 1) so that 1.0x shows as 0, 2.0x shows as 1, 0.5x shows as -0.5
+                centered_ratios = [r - 1.0 for r in ratios]
 
-                bars = ax.barh(range(len(ratios)), log_ratios, color=colors, alpha=0.7)
+                bars = ax.barh(range(len(ratios)), centered_ratios, color=colors, alpha=0.7)
                 ax.set_yticks(range(len(ratios)))
                 ax.set_yticklabels(labels, fontsize=9)
                 ax.axvline(0, color='black', linestyle='-', linewidth=0.5)
-                ax.set_xlabel('Log2(SAR median / Non-SAR median)')
+                ax.set_xlabel('SAR median / Non-SAR median (centered at 1.0x)')
                 ax.set_title(f'{group_name} Features (n={len(cols)})')
 
                 # Add ratio values on bars
                 for i, (bar, ratio) in enumerate(zip(bars, ratios)):
                     width = bar.get_width()
-                    x_pos = width + 0.1 if width >= 0 else width - 0.1
+                    x_pos = width + 0.05 if width >= 0 else width - 0.05
                     ha = 'left' if width >= 0 else 'right'
                     ax.text(x_pos, bar.get_y() + bar.get_height()/2,
                            f'{ratio:.2f}x', va='center', ha=ha, fontsize=8)
